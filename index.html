@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gestão Financeira Pessoal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/styles.css" />
+    <!-- Chart.js via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="logo">FinançasPro</div>
+        <nav class="nav">
+          <a data-route="dashboard" class="nav-link active">Dashboard</a>
+          <a data-route="transactions" class="nav-link">Transações</a>
+          <a data-route="categories" class="nav-link">Categorias</a>
+          <a data-route="goals" class="nav-link">Metas</a>
+        </nav>
+      </aside>
+
+      <div class="content">
+        <header class="header">
+          <div class="header-left">
+            <button id="btn-back" class="btn-back" aria-label="Voltar" title="Voltar">←</button>
+            <h1>Gestão Financeira Pessoal</h1>
+          </div>
+          <div class="summary">
+            <div class="summary-item">
+              <span class="label">Receitas</span>
+              <span id="summary-income" class="value value-income">R$ 0,00</span>
+            </div>
+            <div class="summary-item">
+              <span class="label">Despesas</span>
+              <span id="summary-expense" class="value value-expense">R$ 0,00</span>
+            </div>
+            <div class="summary-item">
+              <span class="label">Saldo</span>
+              <span id="summary-balance" class="value">R$ 0,00</span>
+            </div>
+          </div>
+        </header>
+
+        <main class="page-container">
+          <!-- Dashboard -->
+          <section id="page-dashboard" class="page">
+            <div class="dashboard-grid-charts">
+              <div class="card">
+                <h2 class="card-title">Despesas por Categoria</h2>
+                <div class="chart-square">
+                  <canvas id="pie-expenses-by-category"></canvas>
+                </div>
+                <div id="pie-info" class="chart-info" aria-live="polite"></div>
+              </div>
+
+              <div class="card">
+                <h2 class="card-title">Receitas vs Despesas</h2>
+                <canvas id="bar-income-vs-expense"></canvas>
+              </div>
+            </div>
+
+            <div class="card">
+              <h2 class="card-title">Meta Mensal de Gastos</h2>
+              <div class="progress">
+                <div class="progress-bar">
+                  <div id="progress-fill" class="progress-fill" style="width:0%"></div>
+                </div>
+                <div class="progress-text">
+                  <span id="progress-spent">Gasto: R$ 0,00</span>
+                  <span id="progress-goal">Meta: R$ 0,00</span>
+                </div>
+                <div class="progress-text">
+                  <span id="progress-percent">Progresso: 0%</span>
+                  <span id="progress-warning" class="warning" hidden></span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Transações -->
+          <section id="page-transactions" class="page hidden">
+            <div class="card">
+              <h2 class="card-title">Nova Transação</h2>
+              <form id="form-transaction" class="form-grid">
+                <div class="form-group">
+                  <label for="tx-description">Descrição</label>
+                  <input id="tx-description" name="description" type="text" required />
+                </div>
+                <div class="form-group">
+                  <label for="tx-amount">Valor (R$)</label>
+                  <input id="tx-amount" name="amount" type="number" min="0.01" step="0.01" required />
+                </div>
+                <div class="form-group">
+                  <label for="tx-date">Data</label>
+                  <input id="tx-date" name="date" type="date" required />
+                </div>
+                <div class="form-group">
+                  <label for="tx-type">Tipo</label>
+                  <select id="tx-type" name="type" required>
+                    <option value="expense">Despesa</option>
+                    <option value="income">Receita</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="tx-category">Categoria</label>
+                  <select id="tx-category" name="categoryId" required></select>
+                </div>
+                <div class="form-group form-actions">
+                  <button type="submit" class="btn btn-primary">Adicionar</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="card">
+              <h2 class="card-title">Transações do Mês Atual</h2>
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Descrição</th>
+                    <th>Categoria</th>
+                    <th>Valor</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="table-transactions"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- Categorias -->
+          <section id="page-categories" class="page hidden">
+            <div class="card">
+              <h2 class="card-title">Nova Categoria</h2>
+              <form id="form-category" class="form-grid small">
+                <div class="form-group">
+                  <label for="cat-name">Nome</label>
+                  <input id="cat-name" name="name" type="text" required />
+                </div>
+                <div class="form-group">
+                  <label for="cat-color">Cor</label>
+                  <input id="cat-color" name="color" type="color" value="#6200ee" required />
+                </div>
+                <div class="form-group form-actions">
+                  <button type="submit" class="btn btn-primary">Adicionar</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="card">
+              <h2 class="card-title">Categorias</h2>
+              <div id="grid-categories" class="grid-categories"></div>
+            </div>
+          </section>
+
+          <!-- Metas -->
+          <section id="page-goals" class="page hidden">
+            <div class="card">
+              <h2 class="card-title">Meta Mensal de Gastos</h2>
+              <form id="form-monthly-goal" class="form-grid small">
+                <div class="form-group">
+                  <label for="goal-amount">Valor da Meta (R$)</label>
+                  <input id="goal-amount" name="amount" type="number" min="0.01" step="0.01" required />
+                </div>
+                <div class="form-group form-actions">
+                  <button type="submit" class="btn btn-primary">Atualizar</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="card">
+              <h2 class="card-title">Meta por Categoria</h2>
+              <form id="form-category-goal" class="form-grid">
+                <div class="form-group">
+                  <label for="goal-category">Categoria</label>
+                  <select id="goal-category" name="categoryId" required></select>
+                </div>
+                <div class="form-group">
+                  <label for="goal-cat-amount">Valor da Meta (R$)</label>
+                  <input id="goal-cat-amount" name="amount" type="number" min="0.01" step="0.01" required />
+                </div>
+                <div class="form-group form-actions">
+                  <button type="submit" class="btn btn-primary">Adicionar</button>
+                </div>
+              </form>
+
+              <div id="list-category-goals" class="grid-category-goals"></div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <!-- FAB (Ações rápidas) -->
+    <div class="fab-container" aria-label="Ações rápidas">
+      <button class="fab-main" aria-label="Abrir ações">+</button>
+      <div class="fab-items">
+        <div class="fab-item-wrap">
+          <span class="fab-label">Transação</span>
+          <button class="fab-item" data-action="add-transaction" aria-label="Nova transação">🧾</button>
+        </div>
+        <div class="fab-item-wrap">
+          <span class="fab-label">Categoria</span>
+          <button class="fab-item" data-action="add-category" aria-label="Nova categoria">🏷️</button>
+        </div>
+        <div class="fab-item-wrap">
+          <span class="fab-label">Meta</span>
+          <button class="fab-item" data-action="add-goal" aria-label="Definir meta">🎯</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="assets/js/app.js"></script>
+  </body>
+  </html>

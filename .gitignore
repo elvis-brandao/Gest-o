@@ -1,0 +1,17 @@
+# Sistema/Editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Logs
+*.log
+
+# Builds
+dist/
+build/
+
+# Node
+node_modules/
+
+# Cache
+.cache/
