@@ -19,6 +19,7 @@
           <a data-route="dashboard" class="nav-link active">Dashboard</a>
           <a data-route="transactions" class="nav-link">Transações</a>
           <a data-route="categories" class="nav-link">Categorias</a>
+          <a data-route="banks" class="nav-link">Bancos</a>
           <a data-route="goals" class="nav-link">Metas</a>
         </nav>
       </aside>
@@ -26,43 +27,19 @@
       <div class="content">
         <header class="header">
           <div class="header-left">
-            <button id="btn-back" class="btn-back" aria-label="Voltar" title="Voltar">←</button>
-            <h1>Gestão Financeira Pessoal</h1>
-          </div>
-          <div class="summary">
-            <div class="summary-item">
-              <span class="label">Receitas</span>
-              <span id="summary-income" class="value value-income">R$ 0,00</span>
+            <div class="header-controls">
+              <button id="btn-menu" class="btn-menu" aria-label="Menu">☰</button>
             </div>
-            <div class="summary-item">
-              <span class="label">Despesas</span>
-              <span id="summary-expense" class="value value-expense">R$ 0,00</span>
-            </div>
-            <div class="summary-item">
-              <span class="label">Saldo</span>
-              <span id="summary-balance" class="value">R$ 0,00</span>
+            <div class="header-title">
+              <h1 id="page-title">Dashboard</h1>
             </div>
           </div>
+
         </header>
 
         <main class="page-container">
           <!-- Dashboard -->
           <section id="page-dashboard" class="page">
-            <div class="dashboard-grid-charts">
-              <div class="card">
-                <h2 class="card-title">Despesas por Categoria</h2>
-                <div class="chart-square">
-                  <canvas id="pie-expenses-by-category"></canvas>
-                </div>
-                <div id="pie-info" class="chart-info" aria-live="polite"></div>
-              </div>
-
-              <div class="card">
-                <h2 class="card-title">Receitas vs Despesas</h2>
-                <canvas id="bar-income-vs-expense"></canvas>
-              </div>
-            </div>
-
             <div class="card">
               <h2 class="card-title">Meta Mensal de Gastos</h2>
               <div class="progress">
@@ -77,6 +54,23 @@
                   <span id="progress-percent">Progresso: 0%</span>
                   <span id="progress-warning" class="warning" hidden></span>
                 </div>
+              </div>
+            </div>
+
+            <div class="dashboard-grid-charts">
+              <div class="card">
+                <h2 class="card-title">Despesas por Categoria</h2>
+                <div class="chart-square">
+                  <canvas id="pie-expenses-by-category"></canvas>
+                </div>
+                <div id="pie-info" class="chart-info"></div>
+              </div>
+              <div class="card">
+                <h2 class="card-title">Despesas por Banco</h2>
+                <div class="chart-square">
+                  <canvas id="pie-expenses-by-bank"></canvas>
+                </div>
+                <div id="pie-info-banks" class="chart-info"></div>
               </div>
             </div>
           </section>
@@ -109,6 +103,10 @@
                   <label for="tx-category">Categoria</label>
                   <select id="tx-category" name="categoryId" required></select>
                 </div>
+                <div class="form-group" id="tx-bank-group">
+                  <label for="tx-bank">Banco</label>
+                  <select id="tx-bank" name="bankId"></select>
+                </div>
                 <div class="form-group form-actions">
                   <button type="submit" class="btn btn-primary">Adicionar</button>
                 </div>
@@ -123,6 +121,7 @@
                     <th>Data</th>
                     <th>Descrição</th>
                     <th>Categoria</th>
+                    <th>Banco</th>
                     <th>Valor</th>
                     <th>Ações</th>
                   </tr>
@@ -191,6 +190,27 @@
               <div id="list-category-goals" class="grid-category-goals"></div>
             </div>
           </section>
+          <!-- Bancos -->
+          <section id="page-banks" class="page hidden">
+            <div class="card">
+              <h2 class="card-title">Novo Banco</h2>
+              <form id="form-bank" class="form-grid small">
+                <div class="form-group">
+                  <label for="bank-name">Nome</label>
+                  <input id="bank-name" name="name" type="text" required />
+                </div>
+                <div class="form-group form-actions">
+                  <button type="submit" class="btn btn-primary">Adicionar</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="card">
+              <h2 class="card-title">Bancos</h2>
+              <div id="grid-banks" class="grid-categories"></div>
+            </div>
+          </section>
+
         </main>
       </div>
     </div>
@@ -214,6 +234,7 @@
       </div>
     </div>
 
+    <div id="drawer-overlay" class="drawer-overlay"></div>
     <script src="assets/js/app.js"></script>
   </body>
   </html>
