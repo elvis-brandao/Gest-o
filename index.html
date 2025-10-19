@@ -8,6 +8,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/styles.css" />
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
+    <meta name="theme-color" content="#3b5b70">
     <!-- Chart.js via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   </head>
@@ -16,11 +19,11 @@
       <aside class="sidebar">
         <div class="logo">FinançasPro</div>
         <nav class="nav">
-          <a data-route="dashboard" class="nav-link active">Dashboard</a>
-          <a data-route="transactions" class="nav-link">Transações</a>
-          <a data-route="categories" class="nav-link">Categorias</a>
-          <a data-route="banks" class="nav-link">Bancos</a>
-          <a data-route="goals" class="nav-link">Metas</a>
+          <a href="#/dashboard" data-route="dashboard" class="nav-link active">Dashboard</a>
+          <a href="#/transactions" data-route="transactions" class="nav-link">Transações</a>
+          <a href="#/categories" data-route="categories" class="nav-link">Categorias</a>
+          <a href="#/banks" data-route="banks" class="nav-link">Bancos</a>
+          <a href="#/goals" data-route="goals" class="nav-link">Metas</a>
         </nav>
       </aside>
 
@@ -218,23 +221,19 @@
     <!-- FAB (Ações rápidas) -->
     <div class="fab-container" aria-label="Ações rápidas">
       <button class="fab-main" aria-label="Abrir ações">+</button>
-      <div class="fab-items">
-        <div class="fab-item-wrap">
-          <span class="fab-label">Transação</span>
-          <button class="fab-item" data-action="add-transaction" aria-label="Nova transação">🧾</button>
-        </div>
-        <div class="fab-item-wrap">
-          <span class="fab-label">Categoria</span>
-          <button class="fab-item" data-action="add-category" aria-label="Nova categoria">🏷️</button>
-        </div>
-        <div class="fab-item-wrap">
-          <span class="fab-label">Meta</span>
-          <button class="fab-item" data-action="add-goal" aria-label="Definir meta">🎯</button>
-        </div>
-      </div>
+
     </div>
 
     <div id="drawer-overlay" class="drawer-overlay"></div>
     <script src="assets/js/app.js"></script>
+    <script type="module" src="assets/js/main.js"></script>
+     <script>
+      // Registro do Service Worker sem interferir na lógica existente
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+        });
+      }
+    </script>
   </body>
-  </html>
+</html>

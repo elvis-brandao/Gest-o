@@ -146,6 +146,10 @@ function showPage(route, opts = {}) {
 
 navLinks.forEach(a => a.addEventListener('click', () => showPage(a.dataset.route)));
 
+// Exposição mínima para integração com roteador modular
+window.App = window.App || {};
+window.App.showPage = showPage;
+
 // Renderizações
 function renderSummary() {
   if (!summaryIncomeEl || !summaryExpenseEl || !summaryBalanceEl) return;
