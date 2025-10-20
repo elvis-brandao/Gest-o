@@ -468,12 +468,26 @@ formCat.addEventListener('submit', (e) => {
   renderAll();
 });
 
-formMonthlyGoal.addEventListener('submit', (e) => {
+async function hydrateMonthlyGoalFromSupabase() {
+  try {
+    const svc = window.GoalsService;
+    if (!svc || !svc.isSupabaseEnabled || !svc.isSupabaseEnabled()) return;
+    const mg = await svc.fetchMonthlyGoal();
+    if (mg && mg.target_amount != null) {
+      monthlyGoal = { amount: Number(mg.target_amount) };
+      storage.set('monthlyGoal', monthlyGoal);
+      renderAll();
+    }
+  } catch (e) { console.warn('hydrateMonthlyGoalFromSupabase error:', e); }
+}
+
+formMonthlyGoal.addEventListener('submit', async (e) => {
   e.preventDefault();
   const val = Number(goalAmountEl.value);
   if (!val) return alert('Informe um valor para a meta');
   monthlyGoal = { amount: val };
   storage.set('monthlyGoal', monthlyGoal);
+  try { await window.GoalsService?.saveMonthlyGoal?.(val); } catch (err) { console.warn('saveMonthlyGoal error:', err); }
   renderAll();
 });
 
@@ -495,6 +509,7 @@ document.addEventListener('DOMContentLoaded', () => {
   txDateEl.value = todayISO();
   renderAll();
   showPage('dashboard');
+  hydrateMonthlyGoalFromSupabase();
 
   // Atualiza visibilidade do banco conforme tipo
   txTypeEl?.addEventListener('change', updateBankVisibility);

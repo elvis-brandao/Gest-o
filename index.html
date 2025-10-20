@@ -12,7 +12,10 @@
     <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
     <meta name="theme-color" content="#3b5b70">
     <!-- Chart.js via CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+     <!-- Supabase env and client (safe-load) -->
+     <script src="assets/js/env.js"></script>
+     <script type="module" src="assets/js/core/supabaseClient.js"></script>
   </head>
   <body>
     <div class="layout">
@@ -227,6 +230,7 @@
     <div id="drawer-overlay" class="drawer-overlay"></div>
     <script src="assets/js/app.js"></script>
     <script type="module" src="assets/js/main.js"></script>
+    <script src="assets/js/services/goalsService.js"></script>
      <script>
       // Registro do Service Worker sem interferir na lógica existente
       if ('serviceWorker' in navigator) {
