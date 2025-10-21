@@ -354,40 +354,57 @@ function renderDashboard() {
   const spent = monthlyExpenses();
   const goal = Number(monthlyGoal.amount)||0;
   const progress = budgetProgress();
+  try {
+    const goalSpentLargeEl = document.getElementById('goal-spent-large');
+    if (goalSpentLargeEl) goalSpentLargeEl.textContent = formatCurrency(spent);
+  } catch {}
+  try {
+    const goalMetaLargeEl = document.getElementById('goal-meta-large');
+    if (goalMetaLargeEl) goalMetaLargeEl.textContent = formatCurrency(goal);
+  } catch {}
+  try {
+    const goalRemainingTextEl = document.getElementById('goal-remaining-text');
+    if (goalRemainingTextEl) goalRemainingTextEl.textContent = `Restante: ${formatCurrency(Math.max(goal - spent, 0))}`;
+  } catch {}
   // largura do preenchimento geral
-  progressFillEl.style.width = `${Math.min(progress,100)}%`;
-  // construir segmentos por categoria dentro do preenchimento
-  progressFillEl.style.backgroundColor = 'transparent';
-  while (progressFillEl.firstChild) progressFillEl.removeChild(progressFillEl.firstChild);
-  const byCatSummary = expensesByCat();
-  const totalCatSpent = Object.values(byCatSummary).reduce((s,v)=>s+Number(v),0);
-  if (totalCatSpent > 0) {
-    categories.forEach(c => {
-      const catSpent = byCatSummary[c.id];
-      if (catSpent) {
-        const sharePct = (catSpent / totalCatSpent) * 100;
-        const seg = document.createElement('div');
-        seg.className = 'progress-segment';
-        seg.style.width = `${sharePct}%`;
-        seg.style.backgroundColor = c.color || '#999999';
-        progressFillEl.appendChild(seg);
-      }
-    });
+  if (progressFillEl) {
+    progressFillEl.style.width = `${Math.min(progress,100)}%`;
+    // construir segmentos por categoria dentro do preenchimento
+    progressFillEl.style.backgroundColor = 'transparent';
+    while (progressFillEl.firstChild) progressFillEl.removeChild(progressFillEl.firstChild);
+    const byCatSummary = expensesByCat();
+    const totalCatSpent = Object.values(byCatSummary).reduce((s,v)=>s+Number(v),0);
+    if (totalCatSpent > 0) {
+      categories.forEach(c => {
+        const catSpent = byCatSummary[c.id];
+        if (catSpent) {
+          const sharePct = (catSpent / totalCatSpent) * 100;
+          const seg = document.createElement('div');
+          seg.className = 'progress-segment';
+          seg.style.width = `${sharePct}%`;
+          seg.style.backgroundColor = c.color || '#999999';
+          progressFillEl.appendChild(seg);
+        }
+      });
+    }
   }
   // textos e aviso
-  progressSpentEl.textContent = `Gasto: ${formatCurrency(spent)}`;
-  progressGoalEl.textContent = `Meta: ${formatCurrency(goal)}`;
-  progressPercentEl.textContent = `Progresso: ${progress.toFixed(1)}%`;
-  if (progress > 100) {
-    progressWarningEl.hidden = false;
-    progressWarningEl.textContent = `Meta excedida em ${formatCurrency(spent-goal)}`;
-  } else { progressWarningEl.hidden = true; progressWarningEl.textContent = ''; }
+  if (progressSpentEl) progressSpentEl.textContent = `Gasto: ${formatCurrency(spent)}`;
+  if (progressGoalEl) progressGoalEl.textContent = `Meta: ${formatCurrency(goal)}`;
+  if (progressPercentEl) progressPercentEl.textContent = `Progresso: ${progress.toFixed(1)}%`;
+  if (progressWarningEl) {
+    if (progress > 100) {
+      progressWarningEl.hidden = false;
+      progressWarningEl.textContent = `Meta excedida em ${formatCurrency(spent-goal)}`;
+    } else { progressWarningEl.hidden = true; progressWarningEl.textContent = ''; }
+  }
 
   // gráficos
   const byCat = expensesByCat();
   const labels = categories.filter(c => byCat[c.id]).map(c => c.name);
   const data = categories.filter(c => byCat[c.id]).map(c => byCat[c.id]);
-  const colors = categories.filter(c => byCat[c.id]).map(c => c.color);
+  const categoryPalette = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6'];
+  const colors = labels.map((_, i) => categoryPalette[i % categoryPalette.length]);
   const pieCtx = document.getElementById('pie-expenses-by-category');
   const barCtx = document.getElementById('bar-income-vs-expense');
   // Novo: gráfico de despesas por banco
@@ -396,8 +413,8 @@ function renderDashboard() {
   const byBank = expensesByBank();
   const bankLabels = banks.filter(b => byBank[String(b.id)]).map(b => b.name);
   const bankData = banks.filter(b => byBank[String(b.id)]).map(b => byBank[String(b.id)]);
-  const pastelPalette = ['#FFADAD','#FFD6A5','#FDFFB6','#CAFFBF','#A0C4FF','#BDB2FF','#9ad5ca','#c7c7e2','#ffb3c1','#bde0fe','#bee1e6','#cfe1b9'];
-  const bankColors = bankLabels.map((_, i) => pastelPalette[i % pastelPalette.length]);
+  const bankPalette = ['#8b5cf6','#eab308','#f97316'];
+  const bankColors = bankLabels.map((_, i) => bankPalette[i % bankPalette.length]);
   if (pieChart) pieChart.destroy();
   if (barChart) barChart.destroy();
   if (bankPieChart) bankPieChart.destroy();
@@ -410,7 +427,22 @@ function renderDashboard() {
         maintainAspectRatio: window.innerWidth >= 900,
         aspectRatio: 1,
         plugins: {
-          legend: { position: 'bottom' },
+          legend: {
+            position: 'bottom',
+            onHover: (e, legendItem, chart) => {
+              const index = legendItem.index;
+              chart.setActiveElements([{ datasetIndex: 0, index }]);
+              chart.tooltip.setActiveElements([{ datasetIndex: 0, index }]);
+              if (e?.native?.target) e.native.target.style.cursor = 'pointer';
+              chart.update();
+            },
+            onLeave: (e, legendItem, chart) => {
+              chart.setActiveElements([]);
+              chart.tooltip.setActiveElements([]);
+              if (e?.native?.target) e.native.target.style.cursor = 'default';
+              chart.update();
+            }
+          },
           tooltip: {
             callbacks: {
               label: (ctx) => {
@@ -439,7 +471,22 @@ function renderDashboard() {
         maintainAspectRatio: window.innerWidth >= 900,
         aspectRatio: 1,
         plugins: {
-          legend: { position: 'bottom' },
+          legend: {
+            position: 'bottom',
+            onHover: (e, legendItem, chart) => {
+              const index = legendItem.index;
+              chart.setActiveElements([{ datasetIndex: 0, index }]);
+              chart.tooltip.setActiveElements([{ datasetIndex: 0, index }]);
+              if (e?.native?.target) e.native.target.style.cursor = 'pointer';
+              chart.update();
+            },
+            onLeave: (e, legendItem, chart) => {
+              chart.setActiveElements([]);
+              chart.tooltip.setActiveElements([]);
+              if (e?.native?.target) e.native.target.style.cursor = 'default';
+              chart.update();
+            }
+          },
           tooltip: {
             callbacks: {
               label: (ctx) => {
