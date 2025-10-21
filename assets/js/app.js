@@ -158,6 +158,7 @@ function ensureCategoryProgressCard() {
 const userInfoEl = document.getElementById('user-info');
 const guestInfoEl = document.getElementById('guest-info');
 const userNameEl = document.getElementById('user-name');
+const userEmailEl = document.getElementById('user-email');
 const btnLogoutEl = document.getElementById('btn-logout');
 
 const formLogin = document.getElementById('form-login');
@@ -179,9 +180,16 @@ function updateAuthUI() {
     guestInfoEl?.setAttribute('hidden', '');
     const name = AS.getDisplayName ? AS.getDisplayName() : 'Você';
     if (userNameEl) userNameEl.textContent = name;
+    try {
+      const user = AS.getUser ? AS.getUser() : null;
+      const email = user?.email || '';
+      if (userEmailEl) userEmailEl.textContent = email || '—';
+    } catch {}
   } else {
     userInfoEl?.setAttribute('hidden', '');
     guestInfoEl?.removeAttribute('hidden');
+    if (userNameEl) userNameEl.textContent = 'Usuário';
+    if (userEmailEl) userEmailEl.textContent = '';
   }
 }
 

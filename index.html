@@ -11,6 +11,7 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
     <meta name="theme-color" content="#3b5b70">
+    <link rel="icon" type="image/png" href="/assets/icons/icon-192.png">
     <!-- Chart.js via CDN -->
      <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
      <!-- Supabase env and client (safe-load) -->
@@ -29,6 +30,26 @@
           <a href="#/banks" data-route="banks" class="nav-link">Bancos</a>
           <a href="#/goals" data-route="goals" class="nav-link">Metas</a>
         </nav>
+        <div class="menu-footer">
+          <div id="user-info" class="user-info" hidden>
+            <div class="user-card">
+              <div class="avatar" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="8" r="4"></circle>
+                  <path d="M6 20a6 6 0 0 1 12 0"></path>
+                </svg>
+              </div>
+              <div class="user-text">
+                <p id="user-name" class="user-name">Usuário</p>
+                <p id="user-email" class="user-email muted">email@exemplo.com</p>
+              </div>
+            </div>
+            <button id="btn-logout" class="btn btn-secondary full">Sair</button>
+          </div>
+          <div id="guest-info" class="user-info" hidden>
+            <span class="muted">Você não está logado</span>
+          </div>
+        </div>
       </aside>
 
       <div class="content">
@@ -39,32 +60,6 @@
             </div>
             <div class="header-title">
               <h1 id="page-title">Dashboard</h1>
-            </div>
-          </div>
-
-          <div class="header-right">
-            <div id="user-info" class="user-info" hidden>
-              <span id="user-greeting">Olá, <strong id="user-name"></strong></span>
-              <button id="btn-logout" class="btn btn-secondary small">Sair</button>
-            </div>
-            <div id="guest-info" class="user-info" hidden>
-              <span>Você não está logado</span>
-            </div>
-          </div>
-
-          <!-- Resumo no topo (somente dashboard) -->
-          <div class="summary" id="dashboard-summary">
-            <div class="summary-item">
-              <span class="label">Receitas</span>
-              <span id="summary-income" class="value value-income">R$ 0,00</span>
-            </div>
-            <div class="summary-item">
-              <span class="label">Despesas</span>
-              <span id="summary-expense" class="value value-expense">R$ 0,00</span>
-            </div>
-            <div class="summary-item">
-              <span class="label">Saldo</span>
-              <span id="summary-balance" class="value">R$ 0,00</span>
             </div>
           </div>
         </header>
