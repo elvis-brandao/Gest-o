@@ -263,7 +263,7 @@ function renderTransactions() {
       <td><span class="badge" style="background:${cat?.color||'#999'}">${cat?.name||'Sem categoria'}</span></td>
       <td>${!isIncome ? `<span class=\"badge\">${bank?.name||'Dinheiro'}</span>` : '-'}</td>
       <td><span style="color:${isIncome?'#2e7d32':'#c62828'}">${isIncome?'+':'-'} ${formatCurrency(t.amount)}</span></td>
-      <td><button class="action delete" data-id="${t.id}">Excluir</button></td>
+      <td><button class="action delete" data-id="${t.id}" aria-label="Excluir transação" title="Excluir" type="button"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg></button></td>
     </tr>`;
   }).join('');
   tableTransactionsTbody.innerHTML = rows || `<tr><td colspan="6" style="text-align:center">Nenhuma transação registrada neste mês</td></tr>`;
@@ -271,6 +271,8 @@ function renderTransactions() {
   tableTransactionsTbody.querySelectorAll('button.delete').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.id;
+      const ok = window.confirm('Tem certeza que deseja excluir esta transação?');
+      if (!ok) return;
       try {
         if (canUseSupabase() && window.TransactionsService?.deleteTransaction) {
           await window.TransactionsService.deleteTransaction(id);
@@ -291,7 +293,15 @@ function renderCategories() {
     <div class="category-card" style="border-left-color:${c.color}">
       <div class="category-header">
         <h3>${c.name}</h3>
-        <button class="action delete" data-id="${c.id}">Excluir</button>
+        <button class="action delete" data-id="${c.id}" aria-label="Excluir categoria" title="Excluir" type="button">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+            <path d="M10 11v6"></path>
+            <path d="M14 11v6"></path>
+            <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
+          </svg>
+        </button>
       </div>
       <div class="category-color" style="background:${c.color}"></div>
     </div>
@@ -299,6 +309,8 @@ function renderCategories() {
   gridCategoriesEl.querySelectorAll('button.delete').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.id;
+      const ok = window.confirm('Tem certeza que deseja excluir esta categoria?');
+      if (!ok) return;
       try {
         if (canUseSupabase() && window.CategoriesService?.deleteCategory) {
           await window.CategoriesService.deleteCategory(id);
@@ -326,7 +338,15 @@ function renderGoals() {
       <div class="goal-card" style="border-left-color:${cat?.color||'#999'}">
         <div class="goal-header">
           <h3>${cat?.name||'Categoria'}</h3>
-          <button class="action delete" data-id="${g.id}">Excluir</button>
+          <button class="action delete" data-id="${g.id}" aria-label="Excluir meta" title="Excluir" type="button">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+              <path d="M10 11v6"></path>
+              <path d="M14 11v6"></path>
+              <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
         </div>
         <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(progress,100)}%;background:${cat?.color||'#999'}"></div></div>
         <div class="progress-text">
@@ -343,6 +363,8 @@ function renderGoals() {
   listCategoryGoalsEl.querySelectorAll('button.delete').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.id;
+      const ok = window.confirm('Tem certeza que deseja excluir esta meta?');
+      if (!ok) return;
       try {
         if (canUseSupabase() && window.GoalsService?.deleteGoal) {
           await window.GoalsService.deleteGoal(id);
@@ -355,447 +377,8 @@ function renderGoals() {
   });
 }
 
-function renderDashboard() {
-  ensureCategoryProgressCard();
-  const pieInfoEl = document.getElementById('pie-info');
-  // barra de progresso
-  const spent = monthlyExpenses();
-  const goal = Number(monthlyGoal.amount)||0;
-  const progress = budgetProgress();
-  try {
-    const goalSpentLargeEl = document.getElementById('goal-spent-large');
-    if (goalSpentLargeEl) goalSpentLargeEl.textContent = formatCurrency(spent);
-  } catch {}
-  try {
-    const goalMetaLargeEl = document.getElementById('goal-meta-large');
-    if (goalMetaLargeEl) goalMetaLargeEl.textContent = formatCurrency(goal);
-  } catch {}
-  try {
-    const goalRemainingTextEl = document.getElementById('goal-remaining-text');
-    if (goalRemainingTextEl) goalRemainingTextEl.textContent = `Restante: ${formatCurrency(Math.max(goal - spent, 0))}`;
-  } catch {}
-  // largura do preenchimento geral
-  if (progressFillEl) {
-    progressFillEl.style.width = `${Math.min(progress,100)}%`;
-    // construir segmentos por categoria dentro do preenchimento
-    progressFillEl.style.backgroundColor = 'transparent';
-    while (progressFillEl.firstChild) progressFillEl.removeChild(progressFillEl.firstChild);
-    const byCatSummary = expensesByCat();
-    const totalCatSpent = Object.values(byCatSummary).reduce((s,v)=>s+Number(v),0);
-    if (totalCatSpent > 0) {
-      categories.forEach(c => {
-        const catSpent = byCatSummary[c.id];
-        if (catSpent) {
-          const sharePct = (catSpent / totalCatSpent) * 100;
-          const seg = document.createElement('div');
-          seg.className = 'progress-segment';
-          seg.style.width = `${sharePct}%`;
-          seg.style.backgroundColor = c.color || '#999999';
-          progressFillEl.appendChild(seg);
-        }
-      });
-    }
-  }
-  // textos e aviso
-  if (progressSpentEl) progressSpentEl.textContent = `Gasto: ${formatCurrency(spent)}`;
-  if (progressGoalEl) progressGoalEl.textContent = `Meta: ${formatCurrency(goal)}`;
-  if (progressPercentEl) progressPercentEl.textContent = `Progresso: ${progress.toFixed(1)}%`;
-  if (progressWarningEl) {
-    if (progress > 100) {
-      progressWarningEl.hidden = false;
-      progressWarningEl.textContent = `Meta excedida em ${formatCurrency(spent-goal)}`;
-    } else { progressWarningEl.hidden = true; progressWarningEl.textContent = ''; }
-  }
+function renderBanks() {
 
-  // gráficos
-  const byCat = expensesByCat();
-  const labels = categories.filter(c => byCat[c.id]).map(c => c.name);
-  const data = categories.filter(c => byCat[c.id]).map(c => byCat[c.id]);
-  const categoryPalette = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6'];
-  const colors = labels.map((_, i) => categoryPalette[i % categoryPalette.length]);
-  const pieCtx = document.getElementById('pie-expenses-by-category');
-  const barCtx = document.getElementById('bar-income-vs-expense');
-  // Novo: gráfico de despesas por banco
-  const bankCtx = document.getElementById('pie-expenses-by-bank');
-  const pieInfoBanksEl = document.getElementById('pie-info-banks');
-  const byBank = expensesByBank();
-  const bankLabels = banks.filter(b => byBank[String(b.id)]).map(b => b.name);
-  const bankData = banks.filter(b => byBank[String(b.id)]).map(b => byBank[String(b.id)]);
-  const bankPalette = ['#8b5cf6','#eab308','#f97316'];
-  const bankColors = bankLabels.map((_, i) => bankPalette[i % bankPalette.length]);
-  if (pieChart) pieChart.destroy();
-  if (barChart) barChart.destroy();
-  if (bankPieChart) bankPieChart.destroy();
-
-  if (pieCtx) {
-    pieChart = new Chart(pieCtx, {
-      type: 'pie',
-      data: { labels, datasets: [{ data, backgroundColor: colors }] },
-      options: {
-        maintainAspectRatio: window.innerWidth >= 900,
-        aspectRatio: 1,
-        plugins: {
-          legend: {
-            position: 'bottom',
-            onHover: (e, legendItem, chart) => {
-              const index = legendItem.index;
-              chart.setActiveElements([{ datasetIndex: 0, index }]);
-              chart.tooltip.setActiveElements([{ datasetIndex: 0, index }]);
-              if (e?.native?.target) e.native.target.style.cursor = 'pointer';
-              chart.update();
-            },
-            onLeave: (e, legendItem, chart) => {
-              chart.setActiveElements([]);
-              chart.tooltip.setActiveElements([]);
-              if (e?.native?.target) e.native.target.style.cursor = 'default';
-              chart.update();
-            }
-          },
-          tooltip: {
-            callbacks: {
-              label: (ctx) => {
-                const value = ctx.parsed;
-                const total = ctx.dataset.data.reduce((s,v)=>s+v,0);
-                const pct = total ? (value/total)*100 : 0;
-                return `${ctx.label}: ${formatCurrency(value)} (${pct.toFixed(1)}%)`;
-              }
-            }
-          }
-        }
-      }
-    });
-
-
-  }
-
-  // Gráfico de despesas por banco
-  if (bankCtx) {
-    if (bankPieChart) bankPieChart.destroy();
-
-    bankPieChart = new Chart(bankCtx, {
-      type: 'pie',
-      data: { labels: bankLabels, datasets: [{ data: bankData, backgroundColor: bankColors }] },
-      options: {
-        maintainAspectRatio: window.innerWidth >= 900,
-        aspectRatio: 1,
-        plugins: {
-          legend: {
-            position: 'bottom',
-            onHover: (e, legendItem, chart) => {
-              const index = legendItem.index;
-              chart.setActiveElements([{ datasetIndex: 0, index }]);
-              chart.tooltip.setActiveElements([{ datasetIndex: 0, index }]);
-              if (e?.native?.target) e.native.target.style.cursor = 'pointer';
-              chart.update();
-            },
-            onLeave: (e, legendItem, chart) => {
-              chart.setActiveElements([]);
-              chart.tooltip.setActiveElements([]);
-              if (e?.native?.target) e.native.target.style.cursor = 'default';
-              chart.update();
-            }
-          },
-          tooltip: {
-            callbacks: {
-              label: (ctx) => {
-                const value = ctx.parsed;
-                const total = ctx.dataset.data.reduce((s,v)=>s+v,0);
-                const pct = total ? (value/total)*100 : 0;
-                return `${ctx.label}: ${formatCurrency(value)} (${pct.toFixed(1)}%)`;
-              }
-            }
-          }
-        }
-      }
-    });
-
-
-  }
-
-  if (barCtx) {
-    barChart = new Chart(barCtx, {
-      type: 'bar',
-      data: {
-        labels: ['Receitas', 'Despesas'],
-        datasets: [{ label: 'Valor (R$)', data: [monthlyIncome(), monthlyExpenses()], backgroundColor: ['rgba(142,197,229,0.7)','rgba(255,179,186,0.7)'] }]
-      },
-      options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
-    });
-  }
-
-  // gráfico: progresso da meta por categoria (horizontal)
-  const byCatMap = byCat; // já calculado acima
-  const goals = categoryGoals.map(g => {
-    const cat = categories.find(c => String(c.id) === String(g.categoryId));
-    const spentCat = byCatMap[g.categoryId] || 0;
-    const pct = g.amount>0 ? (spentCat / g.amount) * 100 : 0;
-    return {
-      name: cat?.name || 'Categoria',
-      color: cat?.color || '#999999',
-      percent: Math.min(pct, 100),
-      rawPercent: pct
-    };
-  });
-
-  const goalCanvas = document.getElementById('bar-category-goal-progress');
-  const noteEl = document.getElementById('bar-category-goal-progress-note');
-  if (noteEl) {
-    noteEl.textContent = goals.length ? goals.map(g => `${g.name}: ${g.rawPercent.toFixed(1)}%`).join(' • ') : 'Nenhuma meta por categoria definida';
-  }
-  if (goalCanvas) {
-    if (goalProgressChart) goalProgressChart.destroy();
-    goalProgressChart = new Chart(goalCanvas.getContext('2d'), {
-      type: 'bar',
-      data: {
-        labels: goals.map(g => g.name),
-        datasets: [{
-          label: '% da meta',
-          data: goals.map(g => g.percent),
-          backgroundColor: goals.map(g => hexToRgba(g.color, 0.7))
-        }]
-      },
-      options: {
-        indexAxis: 'y',
-        maintainAspectRatio: false,
-        scales: { x: { beginAtZero: true, max: 100, ticks: { callback: (v) => `${v}%` } } },
-        plugins: {
-          legend: { display: false },
-          title: { display: true, text: 'Progresso (%) da Meta por Categoria' },
-          tooltip: { callbacks: { label: (ctx) => `${ctx.parsed.x.toFixed(1)}%` } }
-        }
-      }
-    });
-  }
-}
-
-function renderAll() {
-  renderSummary();
-  renderDashboard();
-  renderTransactions();
-  renderCategories();
-  renderGoals();
-  renderBanks();
-}
-
-// Eventos de formulário
-formTx.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (!txDescriptionEl.value || !txAmountEl.value || !txDateEl.value) return alert('Preencha todos os campos');
-  const localTx = {
-    description: txDescriptionEl.value.trim(),
-    amount: Number(txAmountEl.value),
-    date: txDateEl.value,
-    type: txTypeEl.value,
-    categoryId: String(txCategoryEl.value),
-    bankId: (txTypeEl.value==='expense' && txBankEl && txBankEl.value) ? String(txBankEl.value) : null
-  };
-  try {
-    if (canUseSupabase() && window.TransactionsService?.createTransaction) {
-      const created = await window.TransactionsService.createTransaction(mapLocalTransactionToDb(localTx));
-      transactions.push({ id: created.id, ...localTx });
-    } else {
-      transactions.push({ id: Date.now(), ...localTx });
-    }
-  } catch (err) {
-    console.warn('createTransaction supabase error, usando local:', err);
-    transactions.push({ id: Date.now(), ...localTx });
-  }
-  storage.set('transactions', transactions);
-  // reset
-  txDescriptionEl.value = '';
-  txAmountEl.value = '';
-  txDateEl.value = todayISO();
-  txTypeEl.value = 'expense';
-  txCategoryEl.value = categories[0]?.id || '';
-  if (txBankEl) txBankEl.value = '';
-  renderAll();
-});
-
-formCat.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (!catNameEl.value || !catColorEl.value) return alert('Preencha todos os campos');
-  const name = catNameEl.value.trim();
-  const color = catColorEl.value;
-  const payload = { name, color, type: 'expense' };
-  try {
-    if (window.CategoriesService?.createCategory) {
-      const created = await window.CategoriesService.createCategory(payload);
-      categories.push({ id: created.id, name: created.name, color: created.color });
-    } else {
-      categories.push({ id: Date.now(), name, color });
-    }
-  } catch (err) {
-    console.warn('createCategory error, usando local:', err);
-    categories.push({ id: Date.now(), name, color });
-  }
-  storage.set('categories', categories);
-  catNameEl.value = '';
-  catColorEl.value = '#6200ee';
-  renderAll();
-});
-
-async function hydrateMonthlyGoalFromSupabase() {
-  try {
-    const svc = window.GoalsService;
-    if (!svc || !svc.isSupabaseEnabled || !svc.isSupabaseEnabled()) return;
-    const mg = await svc.fetchMonthlyGoal();
-    if (mg && mg.target_amount != null) {
-      monthlyGoal = { amount: Number(mg.target_amount) };
-      storage.set('monthlyGoal', monthlyGoal);
-      renderAll();
-    }
-  } catch (e) { console.warn('hydrateMonthlyGoalFromSupabase error:', e); }
-}
-
-// Hidrata dados do usuário a partir do Supabase
-async function hydrateTransactionsFromSupabase() {
-  try {
-    if (!canUseSupabase() || !window.TransactionsService?.fetchTransactions) return;
-    const rows = await window.TransactionsService.fetchTransactions();
-    transactions = (rows || []).map(mapDbTransactionToLocal);
-    storage.set('transactions', transactions);
-  } catch (e) { console.warn('hydrateTransactionsFromSupabase error:', e); }
-}
-async function hydrateCategoriesFromSupabase() {
-  try {
-    if (!canUseSupabase() || !window.CategoriesService?.fetchCategories) return;
-    const rows = await window.CategoriesService.fetchCategories();
-    categories = (rows || []).map(r => ({ id: r.id, name: r.name, color: r.color }));
-    storage.set('categories', categories);
-  } catch (e) { console.warn('hydrateCategoriesFromSupabase error:', e); }
-}
-async function hydrateBanksFromSupabase() {
-  try {
-    if (!canUseSupabase() || !window.BanksService?.fetchBanks) return;
-    const rows = await window.BanksService.fetchBanks();
-    banks = (rows || []).map(r => ({ id: r.id, name: r.name }));
-    storage.set('banks', banks);
-  } catch (e) { console.warn('hydrateBanksFromSupabase error:', e); }
-}
-function mapDbGoalToLocal(row) {
-  return {
-    id: row.id,
-    categoryId: row.category_id != null ? String(row.category_id) : null,
-    amount: Number(row.target_amount || 0),
-  };
-}
-async function hydrateCategoryGoalsFromSupabase() {
-  try {
-    const svc = window.GoalsService;
-    if (!svc || !svc.isSupabaseEnabled || !svc.isSupabaseEnabled()) return;
-    const all = await svc.fetchGoals();
-    const catGoals = (all || []).filter(g => g.category_id != null && (g.name || '').toLowerCase() !== 'monthly');
-    categoryGoals = catGoals.map(mapDbGoalToLocal);
-    storage.set('categoryGoals', categoryGoals);
-  } catch (e) { console.warn('hydrateCategoryGoalsFromSupabase error:', e); }
-}
-async function hydrateUserData() {
-  await Promise.all([
-    hydrateCategoriesFromSupabase(),
-    hydrateBanksFromSupabase(),
-    hydrateTransactionsFromSupabase(),
-    hydrateMonthlyGoalFromSupabase(),
-    hydrateCategoryGoalsFromSupabase(),
-  ]);
-  renderAll();
-}
-
-formMonthlyGoal.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const val = Number(goalAmountEl.value);
-  if (!val) return alert('Informe um valor para a meta');
-  monthlyGoal = { amount: val };
-  storage.set('monthlyGoal', monthlyGoal);
-  try { await window.GoalsService?.saveMonthlyGoal?.(val); } catch (err) { console.warn('saveMonthlyGoal error:', err); }
-  renderAll();
-});
-
-formCategoryGoal.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const catId = String(goalCategoryEl.value);
-  const amount = Number(goalCatAmountEl.value);
-  if (!catId || !amount) return alert('Preencha todos os campos');
-  try {
-    if (canUseSupabase() && window.GoalsService?.createGoal) {
-      const created = await window.GoalsService.createGoal({ category_id: catId, target_amount: amount });
-      categoryGoals.push({ id: created.id, categoryId: catId, amount });
-    } else {
-      categoryGoals.push({ id: Date.now(), categoryId: catId, amount });
-    }
-  } catch (err) {
-    console.warn('createGoal supabase error, usando local:', err);
-    categoryGoals.push({ id: Date.now(), categoryId: catId, amount });
-  }
-  storage.set('categoryGoals', categoryGoals);
-  goalCategoryEl.value = categories[0]?.id || '';
-  goalCatAmountEl.value = '';
-  renderAll();
-});
-
-// Inicialização
-document.addEventListener('DOMContentLoaded', () => {
-  // configura selects iniciais
-  txDateEl.value = todayISO();
-  renderAll();
-  // Em vez de fixar 'auth', segue o hash atual
-  applyRouteFromHash();
-  hydrateMonthlyGoalFromSupabase();
-  if (canUseSupabase()) { hydrateUserData(); }
-  // Atualiza visibilidade do banco conforme tipo
-  txTypeEl?.addEventListener('change', updateBankVisibility);
-  updateBankVisibility();
-  // FAB: ação direta para nova transação
-  const fab = document.querySelector('.fab-container');
-  const fabMain = document.querySelector('.fab-main');
-  if (fab && fabMain) {
-    fabMain.addEventListener('click', (e) => {
-      e.stopPropagation();
-      showPage('transactions');
-      txDescriptionEl?.focus();
-    });
-  }
-});
-
-// Menu hambúrguer: abrir/fechar drawer (mobile)
-const sidebar = document.querySelector('.sidebar');
-const overlay = document.querySelector('.drawer-overlay');
-const btnMenu = document.getElementById('btn-menu');
-
-const openDrawer = () => {
-  sidebar?.classList.add('open');
-  overlay?.classList.add('open');
-};
-const closeDrawer = () => {
-  sidebar?.classList.remove('open');
-  overlay?.classList.remove('open');
-};
-const toggleDrawer = () => {
-  if (sidebar?.classList.contains('open')) closeDrawer(); else openDrawer();
-};
-
-btnMenu?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  toggleDrawer();
-});
-overlay?.addEventListener('click', closeDrawer);
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeDrawer();
-});
-// Fecha drawer ao clicar em um link da navegação (mobile)
-  document.querySelectorAll('.sidebar .nav-link').forEach((a) => {
-    a.addEventListener('click', () => {
-      if (window.innerWidth < 900) closeDrawer();
-    });
-  });
-  // Garante estado correto ao mudar para desktop
-  window.addEventListener('resize', () => {
-    if (window.innerWidth >= 900) closeDrawer();
-  });
-
-function updateBankVisibility() {
-  if (!txTypeEl || !txBankGroupEl) return;
-  const isExpense = txTypeEl.value === 'expense';
-  txBankGroupEl.style.display = isExpense ? '' : 'none';
 }
 
 function renderBanks() {
@@ -804,13 +387,15 @@ function renderBanks() {
     <div class="bank-card">
       <div class="bank-header">
         <h3>${b.name}</h3>
-        <button class="action delete" data-id="${b.id}">Excluir</button>
+        <button class="action delete" data-id="${b.id}" aria-label="Excluir banco" title="Excluir" type="button"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg></button>
       </div>
     </div>
   `).join('');
   gridBanksEl.querySelectorAll('button.delete').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.id;
+      const ok = window.confirm('Tem certeza que deseja excluir este banco?');
+      if (!ok) return;
       try {
         if (canUseSupabase() && window.BanksService?.deleteBank) {
           await window.BanksService.deleteBank(id);
@@ -948,3 +533,58 @@ formRegister?.addEventListener('submit', async (e) => {
     console.warn('Falha no cadastro:', err);
   }
 });
+
+// ===== Funções auxiliares restauradas =====
+function updateBankVisibility() {
+  if (!txBankGroupEl || !txTypeEl) return;
+  txBankGroupEl.hidden = (txTypeEl.value !== 'expense');
+}
+// Atualiza visibilidade ao trocar tipo de transação
+try { txTypeEl?.addEventListener('change', updateBankVisibility); } catch {}
+
+function renderDashboard() {
+  // Resumo + barra de progresso da meta mensal
+  renderSummary();
+  const goal = Number(monthlyGoal.amount) || 0;
+  const spent = monthlyExpenses();
+  const pct = budgetProgress();
+  if (progressFillEl) progressFillEl.style.width = Math.min(pct, 100) + '%';
+  if (progressSpentEl) progressSpentEl.textContent = formatCurrency(spent);
+  if (progressGoalEl) progressGoalEl.textContent = formatCurrency(goal);
+  if (progressPercentEl) progressPercentEl.textContent = pct.toFixed(1) + '%';
+  if (progressWarningEl) progressWarningEl.textContent = pct > 100 ? 'Meta mensal excedida' : '';
+}
+
+function renderAll() {
+  try {
+    renderSummary();
+    renderTransactions();
+    renderCategories();
+    renderGoals();
+    renderBanks();
+    renderDashboard();
+    ensureCategoryProgressCard();
+  } catch (err) {
+    console.warn('Falha ao renderizar:', err);
+  }
+}
+
+async function hydrateMonthlyGoalFromSupabase() {
+  try {
+    if (canUseSupabase() && window.GoalsService?.getMonthlyGoal) {
+      const res = await window.GoalsService.getMonthlyGoal();
+      if (res && res.amount != null) {
+        monthlyGoal.amount = Number(res.amount);
+        storage.set('monthlyGoal', monthlyGoal);
+      }
+    }
+  } catch (err) {
+    console.warn('hydrateMonthlyGoalFromSupabase error:', err);
+  }
+}
+
+async function hydrateUserData() {
+  try {
+    await hydrateMonthlyGoalFromSupabase();
+  } catch {}
+}
