@@ -1,16 +1,16 @@
 (function(){
-  const { Supabase } = window;
+  // use window.Supabase dynamically
 
   const isSupabaseEnabled = () => {
     try {
       const env = window.__ENV || {};
-      return !!env.USE_SUPABASE && !!Supabase;
+      return !!env.USE_SUPABASE && !!window.Supabase && !!window.Supabase.auth;
     } catch (e) { return false; }
   };
 
   const getUserId = async () => {
     if (!isSupabaseEnabled()) return null;
-    const { data: { user } } = await Supabase.auth.getUser();
+    const { data: { user } } = await window.Supabase.auth.getUser();
     return user?.id || null;
   };
 
@@ -64,9 +64,10 @@
     const uid = await getUserId();
     if (!uid) return readLocal();
 
-    const { data, error } = await Supabase
+    const { data, error } = await window.Supabase
       .from(supabaseTable)
       .select('*')
+      .eq('user_id', uid)
       .order('created_at', { ascending: false });
     if (error) {
       console.warn('fetchGoals supabase error:', error);
@@ -83,7 +84,7 @@
     if (!uid) return localCreate(payload);
 
     const toInsert = { ...payload, user_id: uid };
-    const { data, error } = await Supabase
+    const { data, error } = await window.Supabase
       .from(supabaseTable)
       .insert(toInsert)
       .select('*')
@@ -103,10 +104,11 @@
     const uid = await getUserId();
     if (!uid) return localUpdate(id, changes);
 
-    const { data, error } = await Supabase
+    const { data, error } = await window.Supabase
       .from(supabaseTable)
       .update(changes)
       .eq('id', id)
+      .eq('user_id', uid)
       .select('*')
       .single();
     if (error) {
@@ -125,10 +127,11 @@
     const uid = await getUserId();
     if (!uid) return localDelete(id);
 
-    const { error } = await Supabase
+    const { error } = await window.Supabase
       .from(supabaseTable)
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', uid);
     if (error) {
       console.warn('deleteGoal supabase error:', error);
       return localDelete(id);
@@ -149,15 +152,16 @@
     const uid = await getUserId();
     if (!uid) return localSaveMonthlyGoal(amount);
 
-    const { data: existing } = await Supabase
+    const { data: existing } = await window.Supabase
       .from(supabaseTable)
       .select('*')
       .eq('name', 'monthly')
+      .eq('user_id', uid)
       .limit(1)
       .maybeSingle();
 
     if (existing && existing.id) {
-      const { data, error } = await Supabase
+      const { data, error } = await window.Supabase
         .from(supabaseTable)
         .update({ target_amount: amount })
         .eq('id', existing.id)
@@ -171,7 +175,7 @@
       return data;
     } else {
       const toInsert = { name: 'monthly', target_amount: amount, user_id: uid };
-      const { data, error } = await Supabase
+      const { data, error } = await window.Supabase
         .from(supabaseTable)
         .insert(toInsert)
         .select('*')

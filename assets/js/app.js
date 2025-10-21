@@ -27,6 +27,34 @@ let monthlyGoal = storage.get('monthlyGoal', { amount: 2000 });
 let categoryGoals = storage.get('categoryGoals', []);
 let banks = storage.get('banks', []);
 
+// Helpers Supabase/Mapeamentos
+function canUseSupabase() {
+  try {
+    const AS = window.AuthService;
+    return !!AS?.isSupabaseEnabled?.() && !!AS?.isAuthenticated?.();
+  } catch { return false; }
+}
+function mapDbTransactionToLocal(row) {
+  return {
+    id: row.id,
+    description: row.description,
+    amount: Number(row.amount),
+    date: row.occurred_at,
+    type: row.type,
+    categoryId: row.category_id != null ? String(row.category_id) : null,
+    bankId: row.bank_id != null ? String(row.bank_id) : null,
+  };
+}
+function mapLocalTransactionToDb(tx) {
+  return {
+    description: tx.description,
+    amount: Number(tx.amount),
+    occurred_at: tx.date,
+    type: tx.type,
+    category_id: tx.categoryId ?? null,
+    bank_id: tx.bankId ?? null,
+  };
+}
 // Helpers de cálculo
 const currentMonthTransactions = () => {
   const now = new Date();
@@ -70,6 +98,7 @@ const pages = {
   categories: document.getElementById('page-categories'),
   banks: document.getElementById('page-banks'),
   goals: document.getElementById('page-goals'),
+  auth: document.getElementById('page-auth'),
 };
 const navLinks = Array.from(document.querySelectorAll('.nav-link'));
 const summaryIncomeEl = document.getElementById('summary-income');
@@ -81,7 +110,7 @@ const progressGoalEl = document.getElementById('progress-goal');
 const progressPercentEl = document.getElementById('progress-percent');
 const progressWarningEl = document.getElementById('progress-warning');
 
-let currentRoute = 'dashboard';
+let currentRoute = 'auth';
 
 // Formulários
 const formTx = document.getElementById('form-transaction');
@@ -126,21 +155,64 @@ function ensureCategoryProgressCard() {
 }
 
 // Navegação
+const userInfoEl = document.getElementById('user-info');
+const guestInfoEl = document.getElementById('guest-info');
+const userNameEl = document.getElementById('user-name');
+const btnLogoutEl = document.getElementById('btn-logout');
+
+const formLogin = document.getElementById('form-login');
+const loginEmailEl = document.getElementById('login-email');
+const loginPasswordEl = document.getElementById('login-password');
+const formRegister = document.getElementById('form-register');
+const regNameEl = document.getElementById('reg-name');
+const regEmailEl = document.getElementById('reg-email');
+const regPasswordEl = document.getElementById('reg-password');
+const authMsgEl = document.getElementById('auth-message');
+const toggleToLoginEl = document.getElementById('auth-toggle-login');
+const toggleToRegisterEl = document.getElementById('auth-toggle-register');
+
+function updateAuthUI() {
+  const AS = window.AuthService;
+  const isAuth = !!AS && AS.isAuthenticated && AS.isAuthenticated();
+  if (isAuth) {
+    userInfoEl?.removeAttribute('hidden');
+    guestInfoEl?.setAttribute('hidden', '');
+    const name = AS.getDisplayName ? AS.getDisplayName() : 'Você';
+    if (userNameEl) userNameEl.textContent = name;
+  } else {
+    userInfoEl?.setAttribute('hidden', '');
+    guestInfoEl?.removeAttribute('hidden');
+  }
+}
+
+// Gate simples na navegação
 function showPage(route, opts = {}) {
-  Object.values(pages).forEach(p => p.classList.add('hidden'));
+  try {
+    const AS = window.AuthService;
+    const supEnabled = !!(window.__ENV?.USE_SUPABASE);
+    const isAuth = !!AS && AS.isAuthenticated && AS.isAuthenticated();
+    if (supEnabled && route !== 'auth' && !isAuth) {
+      location.hash = '#/auth';
+      route = 'auth';
+    }
+    if (supEnabled && route === 'auth' && isAuth) {
+      location.hash = '#/dashboard';
+      route = 'dashboard';
+    }
+  } catch {}
+
+  Object.values(pages).forEach(p => p?.classList.add('hidden'));
   navLinks.forEach(a => a.classList.remove('active'));
-  pages[route].classList.remove('hidden');
+  pages[route]?.classList.remove('hidden');
   const link = navLinks.find(a => a.dataset.route === route);
   if (link) link.classList.add('active');
   currentRoute = route;
-  // Atualiza título da página
   const pageTitleEl = document.getElementById('page-title');
-  const titles = { dashboard: 'Dashboard', transactions: 'Transações', categories: 'Categorias', goals: 'Metas' };
+  const titles = { dashboard: 'Dashboard', transactions: 'Transações', categories: 'Categorias', goals: 'Metas', banks: 'Bancos', auth: 'Entrar' };
   if (pageTitleEl) pageTitleEl.textContent = titles[route] || 'Dashboard';
-  // Menu hambúrguer sempre visível
   const menuBtn = document.getElementById('btn-menu');
   if (menuBtn) menuBtn.hidden = false;
-  // Atualiza telas ao navegar
+  updateAuthUI();
   renderAll();
 }
 
@@ -171,8 +243,8 @@ function renderTransactions() {
   updateBankVisibility();
   // Lista transações do mês
   const rows = currentMonthTransactions().map(t => {
-    const cat = categories.find(c => c.id === Number(t.categoryId));
-    const bank = banks.find(b => b.id === Number(t.bankId));
+    const cat = categories.find(c => String(c.id) === String(t.categoryId));
+    const bank = banks.find(b => String(b.id) === String(t.bankId));
     const isIncome = t.type === 'income';
     return `<tr>
       <td>${new Date(t.date).toLocaleDateString('pt-BR')}</td>
@@ -186,8 +258,13 @@ function renderTransactions() {
   tableTransactionsTbody.innerHTML = rows || `<tr><td colspan="6" style="text-align:center">Nenhuma transação registrada neste mês</td></tr>`;
   // Ações de excluir
   tableTransactionsTbody.querySelectorAll('button.delete').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const id = btn.dataset.id;
+      try {
+        if (canUseSupabase() && window.TransactionsService?.deleteTransaction) {
+          await window.TransactionsService.deleteTransaction(id);
+        }
+      } catch (err) { console.warn('deleteTransaction supabase error:', err); }
       transactions = transactions.filter(t => String(t.id) !== String(id));
       storage.set('transactions', transactions);
       renderAll();
@@ -209,12 +286,16 @@ function renderCategories() {
     </div>
   `).join('');
   gridCategoriesEl.querySelectorAll('button.delete').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = Number(btn.dataset.id);
-      categories = categories.filter(c => c.id !== id);
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      try {
+        if (canUseSupabase() && window.CategoriesService?.deleteCategory) {
+          await window.CategoriesService.deleteCategory(id);
+        }
+      } catch (err) { console.warn('deleteCategory supabase error:', err); }
+      categories = categories.filter(c => String(c.id) !== String(id));
       storage.set('categories', categories);
-      // remove metas ligadas a categoria
-      categoryGoals = categoryGoals.filter(g => g.categoryId !== id);
+      categoryGoals = categoryGoals.filter(g => String(g.categoryId) !== String(id));
       storage.set('categoryGoals', categoryGoals);
       renderAll();
     });
@@ -226,7 +307,7 @@ function renderGoals() {
   // lista metas por categoria
   const byCatSpent = expensesByCat();
   listCategoryGoalsEl.innerHTML = categoryGoals.map(g => {
-    const cat = categories.find(c => c.id === Number(g.categoryId));
+    const cat = categories.find(c => String(c.id) === String(g.categoryId));
     const spent = byCatSpent[g.categoryId] || 0;
     const progress = g.amount>0 ? (spent/g.amount)*100 : 0;
     const over = progress>100 ? `Meta excedida em ${formatCurrency(spent-g.amount)}` : '';
@@ -249,9 +330,14 @@ function renderGoals() {
     `;
   }).join('');
   listCategoryGoalsEl.querySelectorAll('button.delete').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = Number(btn.dataset.id);
-      categoryGoals = categoryGoals.filter(g => g.id !== id);
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      try {
+        if (canUseSupabase() && window.GoalsService?.deleteGoal) {
+          await window.GoalsService.deleteGoal(id);
+        }
+      } catch (err) { console.warn('deleteGoal supabase error:', err); }
+      categoryGoals = categoryGoals.filter(g => String(g.id) !== String(id));
       storage.set('categoryGoals', categoryGoals);
       renderAll();
     });
@@ -382,7 +468,7 @@ function renderDashboard() {
   // gráfico: progresso da meta por categoria (horizontal)
   const byCatMap = byCat; // já calculado acima
   const goals = categoryGoals.map(g => {
-    const cat = categories.find(c => c.id === Number(g.categoryId));
+    const cat = categories.find(c => String(c.id) === String(g.categoryId));
     const spentCat = byCatMap[g.categoryId] || 0;
     const pct = g.amount>0 ? (spentCat / g.amount) * 100 : 0;
     return {
@@ -434,19 +520,28 @@ function renderAll() {
 }
 
 // Eventos de formulário
-formTx.addEventListener('submit', (e) => {
+formTx.addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!txDescriptionEl.value || !txAmountEl.value || !txDateEl.value) return alert('Preencha todos os campos');
-  const tx = {
-    id: Date.now(),
+  const localTx = {
     description: txDescriptionEl.value.trim(),
     amount: Number(txAmountEl.value),
     date: txDateEl.value,
     type: txTypeEl.value,
-    categoryId: Number(txCategoryEl.value),
-    bankId: txTypeEl.value==='expense' && txBankEl ? Number(txBankEl.value) : null
+    categoryId: String(txCategoryEl.value),
+    bankId: (txTypeEl.value==='expense' && txBankEl && txBankEl.value) ? String(txBankEl.value) : null
   };
-  transactions.push(tx);
+  try {
+    if (canUseSupabase() && window.TransactionsService?.createTransaction) {
+      const created = await window.TransactionsService.createTransaction(mapLocalTransactionToDb(localTx));
+      transactions.push({ id: created.id, ...localTx });
+    } else {
+      transactions.push({ id: Date.now(), ...localTx });
+    }
+  } catch (err) {
+    console.warn('createTransaction supabase error, usando local:', err);
+    transactions.push({ id: Date.now(), ...localTx });
+  }
   storage.set('transactions', transactions);
   // reset
   txDescriptionEl.value = '';
@@ -458,10 +553,22 @@ formTx.addEventListener('submit', (e) => {
   renderAll();
 });
 
-formCat.addEventListener('submit', (e) => {
+formCat.addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!catNameEl.value || !catColorEl.value) return alert('Preencha todos os campos');
-  categories.push({ id: Date.now(), name: catNameEl.value.trim(), color: catColorEl.value });
+  const name = catNameEl.value.trim();
+  const color = catColorEl.value;
+  try {
+    if (canUseSupabase() && window.CategoriesService?.createCategory) {
+      const created = await window.CategoriesService.createCategory({ name, color });
+      categories.push({ id: created.id, name: created.name, color: created.color });
+    } else {
+      categories.push({ id: Date.now(), name, color });
+    }
+  } catch (err) {
+    console.warn('createCategory supabase error, usando local:', err);
+    categories.push({ id: Date.now(), name, color });
+  }
   storage.set('categories', categories);
   catNameEl.value = '';
   catColorEl.value = '#6200ee';
@@ -481,6 +588,59 @@ async function hydrateMonthlyGoalFromSupabase() {
   } catch (e) { console.warn('hydrateMonthlyGoalFromSupabase error:', e); }
 }
 
+// Hidrata dados do usuário a partir do Supabase
+async function hydrateTransactionsFromSupabase() {
+  try {
+    if (!canUseSupabase() || !window.TransactionsService?.fetchTransactions) return;
+    const rows = await window.TransactionsService.fetchTransactions();
+    transactions = (rows || []).map(mapDbTransactionToLocal);
+    storage.set('transactions', transactions);
+  } catch (e) { console.warn('hydrateTransactionsFromSupabase error:', e); }
+}
+async function hydrateCategoriesFromSupabase() {
+  try {
+    if (!canUseSupabase() || !window.CategoriesService?.fetchCategories) return;
+    const rows = await window.CategoriesService.fetchCategories();
+    categories = (rows || []).map(r => ({ id: r.id, name: r.name, color: r.color }));
+    storage.set('categories', categories);
+  } catch (e) { console.warn('hydrateCategoriesFromSupabase error:', e); }
+}
+async function hydrateBanksFromSupabase() {
+  try {
+    if (!canUseSupabase() || !window.BanksService?.fetchBanks) return;
+    const rows = await window.BanksService.fetchBanks();
+    banks = (rows || []).map(r => ({ id: r.id, name: r.name }));
+    storage.set('banks', banks);
+  } catch (e) { console.warn('hydrateBanksFromSupabase error:', e); }
+}
+function mapDbGoalToLocal(row) {
+  return {
+    id: row.id,
+    categoryId: row.category_id != null ? String(row.category_id) : null,
+    amount: Number(row.target_amount || 0),
+  };
+}
+async function hydrateCategoryGoalsFromSupabase() {
+  try {
+    const svc = window.GoalsService;
+    if (!svc || !svc.isSupabaseEnabled || !svc.isSupabaseEnabled()) return;
+    const all = await svc.fetchGoals();
+    const catGoals = (all || []).filter(g => g.category_id != null && (g.name || '').toLowerCase() !== 'monthly');
+    categoryGoals = catGoals.map(mapDbGoalToLocal);
+    storage.set('categoryGoals', categoryGoals);
+  } catch (e) { console.warn('hydrateCategoryGoalsFromSupabase error:', e); }
+}
+async function hydrateUserData() {
+  await Promise.all([
+    hydrateCategoriesFromSupabase(),
+    hydrateBanksFromSupabase(),
+    hydrateTransactionsFromSupabase(),
+    hydrateMonthlyGoalFromSupabase(),
+    hydrateCategoryGoalsFromSupabase(),
+  ]);
+  renderAll();
+}
+
 formMonthlyGoal.addEventListener('submit', async (e) => {
   e.preventDefault();
   const val = Number(goalAmountEl.value);
@@ -491,12 +651,22 @@ formMonthlyGoal.addEventListener('submit', async (e) => {
   renderAll();
 });
 
-formCategoryGoal.addEventListener('submit', (e) => {
+formCategoryGoal.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const catId = Number(goalCategoryEl.value);
+  const catId = String(goalCategoryEl.value);
   const amount = Number(goalCatAmountEl.value);
   if (!catId || !amount) return alert('Preencha todos os campos');
-  categoryGoals.push({ id: Date.now(), categoryId: catId, amount });
+  try {
+    if (canUseSupabase() && window.GoalsService?.createGoal) {
+      const created = await window.GoalsService.createGoal({ category_id: catId, target_amount: amount });
+      categoryGoals.push({ id: created.id, categoryId: catId, amount });
+    } else {
+      categoryGoals.push({ id: Date.now(), categoryId: catId, amount });
+    }
+  } catch (err) {
+    console.warn('createGoal supabase error, usando local:', err);
+    categoryGoals.push({ id: Date.now(), categoryId: catId, amount });
+  }
   storage.set('categoryGoals', categoryGoals);
   goalCategoryEl.value = categories[0]?.id || '';
   goalCatAmountEl.value = '';
@@ -508,8 +678,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // configura selects iniciais
   txDateEl.value = todayISO();
   renderAll();
-  showPage('dashboard');
+  showPage('auth');
   hydrateMonthlyGoalFromSupabase();
+  if (canUseSupabase()) { hydrateUserData(); }
 
   // Atualiza visibilidade do banco conforme tipo
   txTypeEl?.addEventListener('change', updateBankVisibility);
@@ -579,20 +750,92 @@ function renderBanks() {
     </div>
   `).join('');
   gridBanksEl.querySelectorAll('button.delete').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = Number(btn.dataset.id);
-      banks = banks.filter(b => b.id !== id);
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      try {
+        if (canUseSupabase() && window.BanksService?.deleteBank) {
+          await window.BanksService.deleteBank(id);
+        }
+      } catch (err) { console.warn('deleteBank supabase error:', err); }
+      banks = banks.filter(b => String(b.id) !== String(id));
       storage.set('banks', banks);
       renderAll();
     });
   });
 }
-formBank?.addEventListener('submit', (e) => {
+formBank?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = bankNameEl?.value.trim();
   if (!name) return alert('Informe o nome do banco');
-  banks.push({ id: Date.now(), name });
+  try {
+    if (canUseSupabase() && window.BanksService?.createBank) {
+      const created = await window.BanksService.createBank({ name });
+      banks.push({ id: created.id, name: created.name });
+    } else {
+      banks.push({ id: Date.now(), name });
+    }
+  } catch (err) {
+    console.warn('createBank supabase error, usando local:', err);
+    banks.push({ id: Date.now(), name });
+  }
   storage.set('banks', banks);
   if (bankNameEl) bankNameEl.value = '';
   renderAll();
+});
+
+// Auth listeners
+window.addEventListener('auth:change', () => {
+  updateAuthUI();
+  if (canUseSupabase()) {
+    hydrateUserData();
+  }
+});
+btnLogoutEl?.addEventListener('click', async () => {
+  try { await window.AuthService?.signOut(); } catch {}
+  location.hash = '#/auth';
+});
+
+toggleToLoginEl?.addEventListener('click', () => {
+  pages.auth?.classList.remove('hidden');
+  loginEmailEl?.focus();
+});
+
+toggleToRegisterEl?.addEventListener('click', () => {
+  pages.auth?.classList.remove('hidden');
+  regNameEl?.focus();
+});
+
+formLogin?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = loginEmailEl?.value?.trim();
+  const password = loginPasswordEl?.value || '';
+  authMsgEl.textContent = '';
+  try {
+    await window.AuthService?.signIn({ email, password });
+    authMsgEl.textContent = 'Login realizado com sucesso';
+    // Hidratar dados do usuário
+    try { await hydrateMonthlyGoalFromSupabase(); } catch {}
+    location.hash = '#/dashboard';
+  } catch (err) {
+    authMsgEl.textContent = (err?.message) || 'Falha no login';
+  }
+});
+
+formRegister?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = regNameEl?.value?.trim();
+  const email = regEmailEl?.value?.trim();
+  const password = regPasswordEl?.value || '';
+  authMsgEl.textContent = '';
+  try {
+    const res = await window.AuthService?.signUp({ name, email, password });
+    if (res?.session) {
+      authMsgEl.textContent = 'Conta criada e sessão iniciada';
+      location.hash = '#/dashboard';
+    } else {
+      authMsgEl.textContent = 'Conta criada. Verifique seu email para confirmar.';
+    }
+  } catch (err) {
+    authMsgEl.textContent = (err?.message) || 'Falha no cadastro';
+  }
 });

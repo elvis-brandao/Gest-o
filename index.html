@@ -14,7 +14,8 @@
     <!-- Chart.js via CDN -->
      <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
      <!-- Supabase env and client (safe-load) -->
-     <script src="assets/js/env.js"></script>
+     <script src="assets/js/env.local.js"></script>
+  <script src="assets/js/env.js"></script>
      <script type="module" src="assets/js/core/supabaseClient.js"></script>
   </head>
   <body>
@@ -41,9 +42,61 @@
             </div>
           </div>
 
+          <div class="header-right">
+            <div id="user-info" class="user-info" hidden>
+              <span id="user-greeting">Olá, <strong id="user-name"></strong></span>
+              <button id="btn-logout" class="btn btn-secondary small">Sair</button>
+            </div>
+            <div id="guest-info" class="user-info" hidden>
+              <span>Você não está logado</span>
+            </div>
+          </div>
         </header>
 
         <main class="page-container">
+          <section id="page-auth" class="page hidden">
+            <div class="card">
+              <h2 class="card-title">Entrar</h2>
+              <form id="form-login" class="form-grid small">
+                <div class="form-group">
+                  <label for="login-email">Email</label>
+                  <input id="login-email" name="email" type="email" required />
+                </div>
+                <div class="form-group">
+                  <label for="login-password">Senha</label>
+                  <input id="login-password" name="password" type="password" required />
+                </div>
+                <div class="form-group form-actions">
+                  <button type="submit" class="btn btn-primary">Entrar</button>
+                  <button type="button" id="auth-toggle-register" class="btn btn-link">Criar conta</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="card">
+              <h2 class="card-title">Criar Conta</h2>
+              <form id="form-register" class="form-grid small">
+                <div class="form-group">
+                  <label for="reg-name">Nome</label>
+                  <input id="reg-name" name="name" type="text" required />
+                </div>
+                <div class="form-group">
+                  <label for="reg-email">Email</label>
+                  <input id="reg-email" name="email" type="email" required />
+                </div>
+                <div class="form-group">
+                  <label for="reg-password">Senha</label>
+                  <input id="reg-password" name="password" type="password" required />
+                </div>
+                <div class="form-group form-actions">
+                  <button type="submit" class="btn btn-primary">Cadastrar</button>
+                  <button type="button" id="auth-toggle-login" class="btn btn-link">Já tenho conta</button>
+                </div>
+              </form>
+            </div>
+
+            <div id="auth-message" class="form-message" aria-live="polite"></div>
+          </section>
           <!-- Dashboard -->
           <section id="page-dashboard" class="page">
             <div class="card">
@@ -228,6 +281,8 @@
     </div>
 
     <div id="drawer-overlay" class="drawer-overlay"></div>
+    <script type="module" src="assets/js/services/authService.js"></script>
+    <script type="module" src="assets/js/services/bootstrapServices.js"></script>
     <script src="assets/js/app.js"></script>
     <script type="module" src="assets/js/main.js"></script>
     <script src="assets/js/services/goalsService.js"></script>

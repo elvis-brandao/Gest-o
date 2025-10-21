@@ -15,3 +15,7 @@ node_modules/
 
 # Cache
 .cache/
+
+# Secrets locais (não versionar)
+assets/js/env.local.js
+.env

@@ -15,7 +15,7 @@ export class Router {
     this.resolve();
   }
   resolve() {
-    const hash = location.hash || '#/dashboard';
+    const hash = location.hash || '#/auth';
     const path = hash.replace(/^#/, '');
     const handler = this.routes.get(path);
     if (handler) handler(); else this.notFound(path);

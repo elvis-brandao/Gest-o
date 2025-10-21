@@ -7,61 +7,55 @@ async function getUserId() {
   return user?.id || null;
 }
 
-export async function fetchBanks() {
+export async function fetchProfile() {
   const s = getSupabase();
-  if (!s) return [];
+  if (!s) return null;
   const uid = await getUserId();
-  if (!uid) return [];
+  if (!uid) return null;
+  
   const { data, error } = await s
-    .from('banks')
+    .from('profiles')
     .select('*')
-    .eq('user_id', uid)
-    .order('created_at', { ascending: false });
-  if (error) return [];
-  return data || [];
+    .eq('id', uid)
+    .single();
+    
+  if (error) {
+    console.warn('fetchProfile error:', error);
+    return null;
+  }
+  return data;
 }
 
-export async function createBank(payload) {
+export async function updateProfile(changes) {
   const s = getSupabase();
   if (!s) throw new Error('Supabase não configurado');
   const uid = await getUserId();
   if (!uid) throw new Error('Usuário não autenticado');
-  const toInsert = { ...payload, user_id: uid };
+  
   const { data, error } = await s
-    .from('banks')
+    .from('profiles')
+    .update(changes)
+    .eq('id', uid)
+    .select('*')
+    .single();
+    
+  if (error) throw error;
+  return data;
+}
+
+export async function createProfile(profileData) {
+  const s = getSupabase();
+  if (!s) throw new Error('Supabase não configurado');
+  const uid = await getUserId();
+  if (!uid) throw new Error('Usuário não autenticado');
+  
+  const toInsert = { ...profileData, id: uid };
+  const { data, error } = await s
+    .from('profiles')
     .insert(toInsert)
     .select('*')
     .single();
+    
   if (error) throw error;
   return data;
-}
-
-export async function updateBank(id, changes) {
-  const s = getSupabase();
-  if (!s) throw new Error('Supabase não configurado');
-  const uid = await getUserId();
-  if (!uid) throw new Error('Usuário não autenticado');
-  const { data, error } = await s
-    .from('banks')
-    .update(changes)
-    .eq('id', id)
-    .eq('user_id', uid)
-    .select('*')
-    .single();
-  if (error) throw error;
-  return data;
-}
-
-export async function deleteBank(id) {
-  const s = getSupabase();
-  if (!s) throw new Error('Supabase não configurado');
-  const uid = await getUserId();
-  if (!uid) throw new Error('Usuário não autenticado');
-  const { error } = await s
-    .from('banks')
-    .delete()
-    .eq('id', id)
-    .eq('user_id', uid);
-  if (error) throw error;
-  return true;
 }
