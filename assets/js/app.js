@@ -224,7 +224,10 @@ function showPage(route, opts = {}) {
   renderAll();
 }
 
-navLinks.forEach(a => a.addEventListener('click', () => showPage(a.dataset.route)));
+navLinks.forEach(a => a.addEventListener('click', () => {
+  showPage(a.dataset.route);
+  try { closeDrawer(); } catch {}
+}));
 
 // Exposição mínima para integração com roteador modular
 window.App = window.App || {};
