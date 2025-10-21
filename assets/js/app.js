@@ -31,7 +31,7 @@ let banks = storage.get('banks', []);
 function canUseSupabase() {
   try {
     const AS = window.AuthService;
-    return !!AS?.isSupabaseEnabled?.() && !!AS?.isAuthenticated?.();
+    return !!AS?.isSupabaseEnabled?.();
   } catch { return false; }
 }
 function mapDbTransactionToLocal(row) {
@@ -211,7 +211,10 @@ function showPage(route, opts = {}) {
   const titles = { dashboard: 'Dashboard', transactions: 'Transações', categories: 'Categorias', goals: 'Metas', banks: 'Bancos', auth: 'Entrar' };
   if (pageTitleEl) pageTitleEl.textContent = titles[route] || 'Dashboard';
   const menuBtn = document.getElementById('btn-menu');
-  if (menuBtn) menuBtn.hidden = false;
+  if (menuBtn) menuBtn.hidden = (route === 'auth');
+  // Toggle modo auth para ajustar layout/ocultar sidebar/header
+  const root = document.body;
+  if (route === 'auth') root.classList.add('auth-mode'); else root.classList.remove('auth-mode');
   updateAuthUI();
   renderAll();
 }
@@ -678,10 +681,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // configura selects iniciais
   txDateEl.value = todayISO();
   renderAll();
-  showPage('auth');
+  // Em vez de fixar 'auth', segue o hash atual
+  applyRouteFromHash();
   hydrateMonthlyGoalFromSupabase();
   if (canUseSupabase()) { hydrateUserData(); }
-
   // Atualiza visibilidade do banco conforme tipo
   txTypeEl?.addEventListener('change', updateBankVisibility);
   updateBankVisibility();
@@ -783,25 +786,64 @@ formBank?.addEventListener('submit', async (e) => {
   renderAll();
 });
 
+// Roteamento por hash
+function getRouteFromHash() {
+  const hash = String(location.hash || '').toLowerCase();
+  if (hash.includes('#/dashboard')) return 'dashboard';
+  if (hash.includes('#/transactions')) return 'transactions';
+  if (hash.includes('#/categories')) return 'categories';
+  if (hash.includes('#/banks')) return 'banks';
+  if (hash.includes('#/goals')) return 'goals';
+  return 'auth';
+}
+function applyRouteFromHash() {
+  const route = getRouteFromHash();
+  showPage(route);
+}
+window.addEventListener('hashchange', applyRouteFromHash);
+
 // Auth listeners
 window.addEventListener('auth:change', () => {
   updateAuthUI();
-  if (canUseSupabase()) {
-    hydrateUserData();
-  }
+  if (canUseSupabase()) { hydrateUserData(); }
+  applyRouteFromHash();
 });
 btnLogoutEl?.addEventListener('click', async () => {
   try { await window.AuthService?.signOut(); } catch {}
   location.hash = '#/auth';
 });
+// Abas de autenticação (login/cadastro)
+const authTabTriggers = Array.from(document.querySelectorAll('.tabs-trigger'));
+const authTabContents = Array.from(document.querySelectorAll('.tabs-content'));
+const showAuthTab = (name) => {
+  authTabContents.forEach((c) => {
+    if (c.dataset.tab === name) c.removeAttribute('hidden'); else c.setAttribute('hidden', '');
+  });
+  authTabTriggers.forEach((t) => {
+    t.classList.toggle('active', t.dataset.tab === name);
+  });
+  // Limpar mensagem ao alternar entre Entrar/Cadastrar
+  if (authMsgEl) authMsgEl.textContent = '';
+};
+authTabTriggers.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab || 'login';
+    showAuthTab(tab);
+    if (tab === 'login') loginEmailEl?.focus(); else regNameEl?.focus();
+  });
+});
+// Garantir aba inicial
+showAuthTab('login');
 
 toggleToLoginEl?.addEventListener('click', () => {
   pages.auth?.classList.remove('hidden');
+  showAuthTab('login');
   loginEmailEl?.focus();
 });
 
 toggleToRegisterEl?.addEventListener('click', () => {
   pages.auth?.classList.remove('hidden');
+  showAuthTab('register');
   regNameEl?.focus();
 });
 
@@ -817,7 +859,17 @@ formLogin?.addEventListener('submit', async (e) => {
     try { await hydrateMonthlyGoalFromSupabase(); } catch {}
     location.hash = '#/dashboard';
   } catch (err) {
-    authMsgEl.textContent = (err?.message) || 'Falha no login';
+    const raw = String(err?.message || '');
+    const isInvalid = /invalid login credentials/i.test(raw);
+    const isEmailNotConfirmed = /confirm/i.test(raw) && /email/i.test(raw);
+    if (isInvalid) {
+      authMsgEl.textContent = 'Não foi possível entrar. Verifique email e senha, ou se sua conta já foi criada.';
+    } else if (isEmailNotConfirmed) {
+      authMsgEl.textContent = 'Email não confirmado. Verifique sua caixa de entrada e confirme seu cadastro.';
+    } else {
+      authMsgEl.textContent = 'Não foi possível entrar. Verifique os dados e tente novamente.';
+    }
+    console.warn('Falha no login:', err);
   }
 });
 
@@ -829,13 +881,13 @@ formRegister?.addEventListener('submit', async (e) => {
   authMsgEl.textContent = '';
   try {
     const res = await window.AuthService?.signUp({ name, email, password });
-    if (res?.session) {
-      authMsgEl.textContent = 'Conta criada e sessão iniciada';
-      location.hash = '#/dashboard';
-    } else {
-      authMsgEl.textContent = 'Conta criada. Verifique seu email para confirmar.';
-    }
+    // Em ambientes sem confirmação de email, garantir sessão ativa
+    try { await window.AuthService?.signIn({ email, password }); } catch {}
+    authMsgEl.textContent = 'Conta criada e sessão iniciada';
+    try { await hydrateMonthlyGoalFromSupabase(); } catch {}
+    location.hash = '#/dashboard';
   } catch (err) {
     authMsgEl.textContent = (err?.message) || 'Falha no cadastro';
+    console.warn('Falha no cadastro:', err);
   }
 });

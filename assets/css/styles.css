@@ -237,3 +237,74 @@ input, select { padding: 10px; border: 1px solid #ddd; border-radius: 10px; font
 .category-header { flex-direction: column; align-items: center; gap: 8px; }
 .category-color { margin: 8px auto; }
 .category-card .action.delete { align-self: center; }
+
+/* ----------------------- Login (Auth) layout ----------------------- */
+body.auth-mode .sidebar, body.auth-mode .header, body.auth-mode .fab-container { display: none !important; }
+body.auth-mode .page-container { padding: 0; }
+
+body.auth-mode #page-auth { display: block; }
+.auth-wrapper { min-height: 100vh; display: grid; grid-template-columns: 1fr; }
+@media (min-width: 900px) {
+  .auth-wrapper { grid-template-columns: 1.4fr 1fr; }
+}
+.auth-hero { display: none; }
+@media (min-width: 900px) {
+  .auth-hero { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #3b5b70, #6b8a99); color: #fff; padding: 40px; }
+  .auth-hero-inner { max-width: 520px; }
+  .auth-hero .brand { font-weight: 700; font-size: 2rem; margin-bottom: 12px; }
+  .auth-hero .subtitle { font-size: 1.1rem; opacity: 0.9; }
+}
+.auth-panel { display: flex; align-items: center; justify-content: center; padding: 32px; }
+.auth-card { width: 100%; max-width: 440px; }
+.auth-card .card { margin-bottom: 16px; }
+.form-message { margin-top: 8px; text-align: center; color: var(--color-error); }
+
+/* Botão de link para alternar login/registro */
+.btn-link { background: transparent; color: var(--color-primary); padding: 0; border: none; cursor: pointer; }
+.btn-link:hover { text-decoration: underline; }
+.action { background: transparent; border: none; color: var(--color-primary); cursor: pointer; }
+.action.delete { color: var(--color-error); }
+.action:hover { text-decoration: underline; }
+
+/* ------- Auth UI refinements (inspirado no modelo) ------- */
+.auth-card-header { text-align: center; margin-bottom: 8px; }
+.auth-lock-circle { width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6, #4f46e5); display: flex; align-items: center; justify-content: center; color: #fff; margin: 0 auto 12px; box-shadow: var(--shadow-sm); }
+.auth-lock-circle svg { width: 32px; height: 32px; }
+.card-desc { font-size: 0.95rem; color: #00000099; text-align: center; }
+
+.auth-tabs { margin-top: 8px; }
+.tabs-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 16px; }
+.tabs-trigger { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; border-radius: 10px; background: #f0f2f6; color: #333; cursor: pointer; border: 1px solid #e0e0e0; }
+.tabs-trigger svg { width: 16px; height: 16px; }
+.tabs-trigger.active { background: var(--color-accent); color: #000; border-color: transparent; }
+
+.tabs-content[hidden] { display: none; }
+
+.input-with-icon { position: relative; }
+.input-with-icon svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: #888; }
+input.with-icon { padding-left: 34px; }
+
+.btn-link.small { font-size: 0.85rem; display: block; text-align: center; margin-top: 8px; }
+
+/* ------- Ajustes mobile específicos para tela de login ------- */
+/* Empilhar campos e evitar overflow no mobile */
+#page-auth .auth-ui .form-grid.small { grid-template-columns: 1fr; }
+#page-auth .auth-ui .form-group { grid-column: 1 / -1; }
+#page-auth .auth-ui .form-actions { align-self: stretch; display: grid; grid-template-columns: 1fr; gap: 8px; }
+#page-auth .auth-ui .form-actions .btn { width: 100%; }
+
+/* Reduzir tamanho dos botões para caber no container */
+@media (max-width: 899px) {
+  #page-auth .auth-ui .btn-primary { padding: 8px 12px; font-size: 0.95rem; }
+  #page-auth .auth-ui .btn-link { font-size: 0.95rem; }
+  #page-auth .auth-ui .tabs-trigger { padding: 8px; font-size: 0.95rem; }
+}
+/* Garantir largura total dos campos na tela de login/cadastro */
+#page-auth .auth-ui .form-group .input-with-icon,
+#page-auth .auth-ui .form-group input,
+#page-auth .auth-ui .form-group select {
+  width: 100%;
+}
+.action { background: transparent; border: none; color: var(--color-primary); cursor: pointer; }
+.action.delete { color: var(--color-error); }
+.action:hover { text-decoration: underline; }

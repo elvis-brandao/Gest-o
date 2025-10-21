@@ -77,8 +77,8 @@
     dispatchAuthChange(currentUser);
   };
 
-  // Inicializa assim que possível
-  setTimeout(init, 0);
+  // Inicializa imediatamente para garantir leitura da sessão antes de roteamento
+  init();
 
   window.AuthService = {
     init,
