@@ -616,15 +616,16 @@ formCat.addEventListener('submit', async (e) => {
   if (!catNameEl.value || !catColorEl.value) return alert('Preencha todos os campos');
   const name = catNameEl.value.trim();
   const color = catColorEl.value;
+  const payload = { name, color, type: 'expense' };
   try {
-    if (canUseSupabase() && window.CategoriesService?.createCategory) {
-      const created = await window.CategoriesService.createCategory({ name, color });
+    if (window.CategoriesService?.createCategory) {
+      const created = await window.CategoriesService.createCategory(payload);
       categories.push({ id: created.id, name: created.name, color: created.color });
     } else {
       categories.push({ id: Date.now(), name, color });
     }
   } catch (err) {
-    console.warn('createCategory supabase error, usando local:', err);
+    console.warn('createCategory error, usando local:', err);
     categories.push({ id: Date.now(), name, color });
   }
   storage.set('categories', categories);
@@ -858,8 +859,9 @@ function applyRouteFromHash() {
 window.addEventListener('hashchange', applyRouteFromHash);
 
 // Auth listeners
-window.addEventListener('auth:change', () => {
+window.addEventListener('auth:change', async () => {
   updateAuthUI();
+  try { await window.CategoriesService?.syncOutbox?.(); } catch {}
   if (canUseSupabase()) { hydrateUserData(); }
   applyRouteFromHash();
 });
@@ -867,7 +869,7 @@ btnLogoutEl?.addEventListener('click', async () => {
   try { await window.AuthService?.signOut(); } catch {}
   location.hash = '#/auth';
 });
-// Abas de autenticação (login/cadastro)
+// Abas de autenticação (login/cadastrar)
 const authTabTriggers = Array.from(document.querySelectorAll('.tabs-trigger'));
 const authTabContents = Array.from(document.querySelectorAll('.tabs-content'));
 const showAuthTab = (name) => {
