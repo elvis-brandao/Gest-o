@@ -129,10 +129,7 @@ const gridCategoriesEl = document.getElementById('grid-categories');
 const formMonthlyGoal = document.getElementById('form-monthly-goal');
 const goalAmountEl = document.getElementById('goal-amount');
 
-const formCategoryGoal = document.getElementById('form-category-goal');
-const goalCategoryEl = document.getElementById('goal-category');
-const goalCatAmountEl = document.getElementById('goal-cat-amount');
-const listCategoryGoalsEl = document.getElementById('list-category-goals');
+
 // Bancos: refs de DOM
 const formBank = document.getElementById('form-bank');
 const bankNameEl = document.getElementById('bank-name');
@@ -222,7 +219,7 @@ function showPage(route, opts = {}) {
   if (menuBtn) menuBtn.hidden = (route === 'auth');
   // Toggle modo auth para ajustar layout/ocultar sidebar/header
   const root = document.body;
-  if (route === 'auth') root.classList.add('auth-mode'); else root.classList.remove('auth-mode');
+  if (route === 'auth') { root.classList.add('auth-mode'); try { closeDrawer(); } catch {} } else { root.classList.remove('auth-mode'); }
   updateAuthUI();
   renderAll();
 }
@@ -232,6 +229,26 @@ navLinks.forEach(a => a.addEventListener('click', () => showPage(a.dataset.route
 // Exposição mínima para integração com roteador modular
 window.App = window.App || {};
 window.App.showPage = showPage;
+
+// Drawer/Menu toggle logic
+const sidebarEl = document.querySelector('.sidebar');
+const drawerOverlayEl = document.getElementById('drawer-overlay') || document.querySelector('.drawer-overlay');
+function openDrawer() {
+  try {
+    sidebarEl?.classList.add('open');
+    drawerOverlayEl?.classList.add('open');
+  } catch {}
+}
+function closeDrawer() {
+  try {
+    sidebarEl?.classList.remove('open');
+    drawerOverlayEl?.classList.remove('open');
+  } catch {}
+}
+const btnMenuEl = document.getElementById('btn-menu');
+btnMenuEl?.addEventListener('click', (e) => { e.stopPropagation(); openDrawer(); });
+drawerOverlayEl?.addEventListener('click', () => closeDrawer());
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
 
 // Renderizações
 function renderSummary() {
@@ -286,8 +303,7 @@ function renderTransactions() {
 }
 
 function renderCategories() {
-  // select metas por categoria
-  goalCategoryEl.innerHTML = categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  // seção de metas por categoria removida
   // grid
   gridCategoriesEl.innerHTML = categories.map(c => `
     <div class="category-card" style="border-left-color:${c.color}">
@@ -327,54 +343,6 @@ function renderCategories() {
 
 function renderGoals() {
   goalAmountEl.value = monthlyGoal.amount || '';
-  // lista metas por categoria
-  const byCatSpent = expensesByCat();
-  listCategoryGoalsEl.innerHTML = categoryGoals.map(g => {
-    const cat = categories.find(c => String(c.id) === String(g.categoryId));
-    const spent = byCatSpent[g.categoryId] || 0;
-    const progress = g.amount>0 ? (spent/g.amount)*100 : 0;
-    const over = progress>100 ? `Meta excedida em ${formatCurrency(spent-g.amount)}` : '';
-    return `
-      <div class="goal-card" style="border-left-color:${cat?.color||'#999'}">
-        <div class="goal-header">
-          <h3>${cat?.name||'Categoria'}</h3>
-          <button class="action delete" data-id="${g.id}" aria-label="Excluir meta" title="Excluir" type="button">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="3 6 5 6 21 6"></polyline>
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
-              <path d="M10 11v6"></path>
-              <path d="M14 11v6"></path>
-              <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
-            </svg>
-          </button>
-        </div>
-        <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(progress,100)}%;background:${cat?.color||'#999'}"></div></div>
-        <div class="progress-text">
-          <span>Gasto: ${formatCurrency(spent)}</span>
-          <span>Meta: ${formatCurrency(g.amount)}</span>
-        </div>
-        <div class="progress-text">
-          <span>Progresso: ${progress.toFixed(1)}%</span>
-          <span class="warning">${over}</span>
-        </div>
-      </div>
-    `;
-  }).join('');
-  listCategoryGoalsEl.querySelectorAll('button.delete').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id = btn.dataset.id;
-      const ok = window.confirm('Tem certeza que deseja excluir esta meta?');
-      if (!ok) return;
-      try {
-        if (canUseSupabase() && window.GoalsService?.deleteGoal) {
-          await window.GoalsService.deleteGoal(id);
-        }
-      } catch (err) { console.warn('deleteGoal supabase error:', err); }
-      categoryGoals = categoryGoals.filter(g => String(g.id) !== String(id));
-      storage.set('categoryGoals', categoryGoals);
-      renderAll();
-    });
-  });
 }
 
 function renderBanks() {
@@ -571,10 +539,10 @@ function renderAll() {
 
 async function hydrateMonthlyGoalFromSupabase() {
   try {
-    if (canUseSupabase() && window.GoalsService?.getMonthlyGoal) {
-      const res = await window.GoalsService.getMonthlyGoal();
-      if (res && res.amount != null) {
-        monthlyGoal.amount = Number(res.amount);
+    if (canUseSupabase() && window.GoalsService?.fetchMonthlyGoal) {
+      const res = await window.GoalsService.fetchMonthlyGoal();
+      if (res && res.target_amount != null) {
+        monthlyGoal.amount = Number(res.target_amount);
         storage.set('monthlyGoal', monthlyGoal);
       }
     }
@@ -583,8 +551,44 @@ async function hydrateMonthlyGoalFromSupabase() {
   }
 }
 
-async function hydrateUserData() {
+async function hydrateAllData() {
   try {
-    await hydrateMonthlyGoalFromSupabase();
-  } catch {}
+    if (canUseSupabase()) {
+      try {
+        const cats = await window.CategoriesService?.fetchCategories?.();
+        if (Array.isArray(cats) && cats.length) {
+          categories = cats.map(c => ({ id: c.id, name: c.name, color: c.color }));
+          storage.set('categories', categories);
+        }
+      } catch (err) { console.warn('hydrate categories error:', err); }
+      try {
+        const bks = await window.BanksService?.fetchBanks?.();
+        if (Array.isArray(bks)) {
+          banks = bks.map(b => ({ id: b.id, name: b.name }));
+          storage.set('banks', banks);
+        }
+      } catch (err) { console.warn('hydrate banks error:', err); }
+      try {
+        const txs = await window.TransactionsService?.fetchTransactions?.();
+        if (Array.isArray(txs)) {
+          transactions = txs.map(mapDbTransactionToLocal);
+          storage.set('transactions', transactions);
+        }
+      } catch (err) { console.warn('hydrate transactions error:', err); }
+      try {
+        const goals = await window.GoalsService?.fetchGoals?.();
+        if (Array.isArray(goals)) {
+          categoryGoals = goals.filter(g => g.category_id).map(g => ({ id: g.id, categoryId: String(g.category_id), amount: Number(g.target_amount || 0) }));
+          storage.set('categoryGoals', categoryGoals);
+        }
+      } catch (err) { console.warn('hydrate goals error:', err); }
+      try { await hydrateMonthlyGoalFromSupabase(); } catch {}
+    }
+  } catch (err) {
+    console.warn('hydrateAllData error:', err);
+  }
+}
+
+async function hydrateUserData() {
+  await hydrateAllData();
 }
