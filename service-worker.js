@@ -57,9 +57,11 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
+  const url = new URL(request.url);
+  const isHttp = url.protocol === 'http:' || url.protocol === 'https:';
+  if (!isHttp) return; // Ignora esquemas como chrome-extension
   if (request.method !== 'GET') return; // não interferir em POST/PUT/etc.
 
-  const url = new URL(request.url);
   const isSameOrigin = url.origin === self.location.origin;
 
   // Navegação: network-first, fallback index para SPA
@@ -79,7 +81,7 @@ self.addEventListener('fetch', (event) => {
           const cloned = response.clone();
           // Só cacheia respostas válidas
           if (response.ok && request.method === 'GET') {
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned)).catch(() => {});
           }
           return response;
         });
@@ -94,7 +96,7 @@ self.addEventListener('fetch', (event) => {
       if (cached) return cached;
       return fetch(request).then((response) => {
         const cloned = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned)).catch(() => {});
         return response;
       }).catch(() => caches.match(request));
     })

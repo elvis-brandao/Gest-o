@@ -15,7 +15,6 @@
     <!-- Chart.js via CDN -->
      <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
      <!-- Supabase env and client (safe-load) -->
-     <script src="assets/js/env.local.js"></script>
   <script src="assets/js/env.js"></script>
      <script type="module" src="assets/js/core/supabaseClient.js"></script>
   </head>
@@ -540,8 +539,8 @@
     <script type="module" src="assets/js/main.js"></script>
     <script src="assets/js/services/goalsService.js"></script>
      <script>
-      // Registro do Service Worker sem interferir na lógica existente
-      if ('serviceWorker' in navigator) {
+      // Registrar Service Worker apenas fora de localhost para evitar cache durante desenvolvimento
+      if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/service-worker.js').catch(() => {});
         });

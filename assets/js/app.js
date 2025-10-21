@@ -225,7 +225,7 @@ function showPage(route, opts = {}) {
 }
 
 navLinks.forEach(a => a.addEventListener('click', () => {
-  showPage(a.dataset.route);
+  // Não chamar showPage aqui; deixar o Router cuidar da navegação
   try { closeDrawer(); } catch {}
 }));
 
@@ -263,13 +263,15 @@ function renderSummary() {
 
 function renderTransactions() {
   // Prepara select de categorias
-  txCategoryEl.innerHTML = categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-  if (!txCategoryEl.value) txCategoryEl.value = categories[0]?.id || '';
+  if (txCategoryEl) {
+    txCategoryEl.innerHTML = categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    if (!txCategoryEl.value) txCategoryEl.value = categories[0]?.id || '';
+  }
   // Prepara select de bancos
   if (txBankEl) {
     txBankEl.innerHTML = `<option value="">Dinheiro</option>` + banks.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
   }
-  if (!txDateEl.value) txDateEl.value = todayISO();
+  if (txDateEl && !txDateEl.value) txDateEl.value = todayISO();
   // Ajusta visibilidade do banco conforme tipo
   updateBankVisibility();
   // Lista transações do mês
@@ -283,31 +285,34 @@ function renderTransactions() {
       <td><span class="badge" style="background:${cat?.color||'#999'}">${cat?.name||'Sem categoria'}</span></td>
       <td>${!isIncome ? `<span class=\"badge\">${bank?.name||'Dinheiro'}</span>` : '-'}</td>
       <td><span style="color:${isIncome?'#2e7d32':'#c62828'}">${isIncome?'+':'-'} ${formatCurrency(t.amount)}</span></td>
-      <td><button class="action delete" data-id="${t.id}" aria-label="Excluir transação" title="Excluir" type="button"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg></button></td>
+      <td><button class="delete" data-id="${t.id}" type="button">Excluir</button></td>
     </tr>`;
   }).join('');
-  tableTransactionsTbody.innerHTML = rows || `<tr><td colspan="6" style="text-align:center">Nenhuma transação registrada neste mês</td></tr>`;
-  // Ações de excluir
-  tableTransactionsTbody.querySelectorAll('button.delete').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id = btn.dataset.id;
-      const ok = window.confirm('Tem certeza que deseja excluir esta transação?');
-      if (!ok) return;
-      try {
-        if (canUseSupabase() && window.TransactionsService?.deleteTransaction) {
-          await window.TransactionsService.deleteTransaction(id);
-        }
-      } catch (err) { console.warn('deleteTransaction supabase error:', err); }
-      transactions = transactions.filter(t => String(t.id) !== String(id));
-      storage.set('transactions', transactions);
-      renderAll();
+  if (tableTransactionsTbody) {
+    tableTransactionsTbody.innerHTML = rows || `<tr><td colspan="6" style="text-align:center">Nenhuma transação registrada neste mês</td></tr>`;
+    // Ações de excluir
+    tableTransactionsTbody.querySelectorAll('button.delete').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        const ok = window.confirm('Tem certeza que deseja excluir esta transação?');
+        if (!ok) return;
+        try {
+          if (canUseSupabase() && window.TransactionsService?.deleteTransaction) {
+            await window.TransactionsService.deleteTransaction(id);
+          }
+        } catch (err) { console.warn('deleteTransaction supabase error:', err); }
+        transactions = transactions.filter(t => String(t.id) !== String(id));
+        storage.set('transactions', transactions);
+        renderAll();
+      });
     });
-  });
+  }
 }
 
 function renderCategories() {
   // seção de metas por categoria removida
   // grid
+  if (!gridCategoriesEl) return;
   gridCategoriesEl.innerHTML = categories.map(c => `
     <div class="category-card" style="border-left-color:${c.color}">
       <div class="category-header">
@@ -345,7 +350,7 @@ function renderCategories() {
 }
 
 function renderGoals() {
-  goalAmountEl.value = monthlyGoal.amount || '';
+  if (goalAmountEl) goalAmountEl.value = monthlyGoal.amount || '';
 }
 
 function renderBanks() {
