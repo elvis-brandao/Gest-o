@@ -275,48 +275,92 @@
     const map = lsGet('monthlyGoalsMap', {});
     map[monthKey] = Number(amount)||0;
     lsSet('monthlyGoalsMap', map);
+    // Espelhar também no storage do app para consistência
+    try {
+      const appMapRaw = localStorage.getItem('monthlyGoals');
+      const appMap = appMapRaw ? JSON.parse(appMapRaw) : {};
+      appMap[monthKey] = Number(amount)||0;
+      localStorage.setItem('monthlyGoals', JSON.stringify(appMap));
+    } catch {}
     return { month_key: monthKey, target_amount: Number(amount)||0 };
   }
   async function fetchMonthlyGoalFor(monthKey){
-    if (window.__ENV?.USE_SUPABASE) {
-      try {
-        const sup = window.SupabaseService;
-        const userId = window.AuthService?.getUser()?.id;
-        if (!sup || !userId) return lsGet('monthlyGoalsMap', {})[monthKey] != null ? { month_key: monthKey, target_amount: Number(lsGet('monthlyGoalsMap', {})[monthKey]) } : null;
-        const { data, error } = await sup.client
-          .from('monthly_goals')
+    try {
+      const env = window.__ENV || {};
+      const sup = window.Supabase;
+      const supEnabled = !!env.USE_SUPABASE && !!sup && !!sup.auth;
+      if (supEnabled) {
+        const { data: { user } } = await sup.auth.getUser();
+        const userId = user?.id || null;
+        if (!userId) throw new Error('No authenticated user');
+        const { data, error } = await sup
+          .from('goals')
           .select('*')
           .eq('user_id', userId)
-          .eq('month_key', monthKey)
+          .eq('name', `monthly:${monthKey}`)
           .limit(1)
           .maybeSingle();
         if (error) throw error;
-        return data ? { month_key: data.month_key, target_amount: Number(data.target_amount)||0 } : null;
-      } catch (e) {
-        const map = lsGet('monthlyGoalsMap', {});
-        return map[monthKey] != null ? { month_key: monthKey, target_amount: Number(map[monthKey]) } : null;
+        return data ? { month_key: monthKey, target_amount: Number(data.target_amount)||0 } : null;
       }
-    } else {
+    } catch (e) {
+      // Fallback para storage local do app (mensal)
+      try {
+        const appMapRaw = localStorage.getItem('monthlyGoals');
+        const appMap = appMapRaw ? JSON.parse(appMapRaw) : {};
+        if (appMap && appMap[monthKey] != null) {
+          return { month_key: monthKey, target_amount: Number(appMap[monthKey])||0 };
+        }
+      } catch {}
+      // Fallback secundário para storage do serviço
       const map = lsGet('monthlyGoalsMap', {});
-      return map[monthKey] != null ? { month_key: monthKey, target_amount: Number(map[monthKey]) } : null;
+      return map[monthKey] != null ? { month_key: monthKey, target_amount: Number(map[monthKey])||0 } : null;
     }
+    // Se Supabase desativado, usar storage do app primeiro
+    try {
+      const appMapRaw = localStorage.getItem('monthlyGoals');
+      const appMap = appMapRaw ? JSON.parse(appMapRaw) : {};
+      if (appMap && appMap[monthKey] != null) {
+        return { month_key: monthKey, target_amount: Number(appMap[monthKey])||0 };
+      }
+    } catch {}
+    const map = lsGet('monthlyGoalsMap', {});
+    return map[monthKey] != null ? { month_key: monthKey, target_amount: Number(map[monthKey])||0 } : null;
   }
   async function saveMonthlyGoalFor(monthKey, amount){
     if (window.__ENV?.USE_SUPABASE) {
       try {
-        const sup = window.SupabaseService;
+        const sup = window.Supabase;
         const userId = window.AuthService?.getUser()?.id;
         if (!sup || !userId) return localSaveMonthlyGoalFor(monthKey, amount);
-        const payload = { user_id: userId, month_key: monthKey, target_amount: Number(amount)||0 };
-        const { data, error } = await sup.client
-          .from('monthly_goals')
-          .upsert(payload, { onConflict: 'user_id,month_key' })
+        const name = `monthly:${monthKey}`;
+        const { data: existing } = await sup
+          .from('goals')
           .select('*')
+          .eq('user_id', userId)
+          .eq('name', name)
           .limit(1)
           .maybeSingle();
+
+        let data, error;
+        if (existing && existing.id) {
+          ({ data, error } = await sup
+            .from('goals')
+            .update({ target_amount: Number(amount)||0 })
+            .eq('id', existing.id)
+            .select('*')
+            .single());
+        } else {
+          const toInsert = { user_id: userId, name, target_amount: Number(amount)||0 };
+          ({ data, error } = await sup
+            .from('goals')
+            .insert(toInsert)
+            .select('*')
+            .single());
+        }
         if (error) throw error;
         await localSaveMonthlyGoalFor(monthKey, Number(amount)||0);
-        return { month_key: data.month_key, target_amount: Number(data.target_amount)||0 };
+        return { month_key: monthKey, target_amount: Number(data.target_amount)||0 };
       } catch (e) {
         return localSaveMonthlyGoalFor(monthKey, Number(amount)||0);
       }

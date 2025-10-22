@@ -35,22 +35,13 @@ const DEFAULT_MONTHLY_GOAL = 5000;
 
 // Estado
 let transactions = storage.get('transactions', []);
-let categories = storage.get('categories', [
-  { id: 1, name: 'Alimentação', color: '#FFADAD' },   // soft red
-  { id: 2, name: 'Transporte', color: '#A0C4FF' },    // soft blue
-  { id: 3, name: 'Moradia', color: '#FDFFB6' },       // soft yellow
-  { id: 4, name: 'Lazer', color: '#BDB2FF' },         // soft lavender
-  { id: 5, name: 'Saúde', color: '#CAFFBF' },         // soft green
-  { id: 6, name: 'Educação', color: '#FFD6A5' },      // soft peach
-  { id: 7, name: 'Roupas', color: '#9ad5ca' },        // soft mint
-  { id: 8, name: 'Outros', color: '#c7c7e2' },        // soft gray-lilac
-]);
-let monthlyGoal = storage.get('monthlyGoal', { amount: 2000 });
+let categories = storage.get('categories', []);
+let monthlyGoal = storage.get('monthlyGoal', { amount: 0 });
 let categoryGoals = storage.get('categoryGoals', []);
 let banks = storage.get('banks', []);
 let selectedMonth = storage.get('selectedMonth', getCurrentMonthKey());
 let monthlyGoalsMap = storage.get('monthlyGoals', {});
-const getSelectedMonthlyGoalAmount = () => Number(monthlyGoalsMap[selectedMonth] ?? monthlyGoal.amount ?? 0);
+const getSelectedMonthlyGoalAmount = () => Number(monthlyGoalsMap[selectedMonth] ?? 0);
 
 // Helpers Supabase/Mapeamentos
 function canUseSupabase() {
@@ -164,6 +155,58 @@ const formBank = document.getElementById('form-bank');
 const bankNameEl = document.getElementById('bank-name');
 const gridBanksEl = document.getElementById('grid-banks');
 
+// Seletor de mês (header)
+const btnMonthFilterEl = document.getElementById('btn-month-filter');
+const monthFilterPopoverEl = document.getElementById('month-filter-popover');
+const monthFilterInputEl = document.getElementById('month-filter-input');
+function openMonthPopover(){
+  try {
+    if (monthFilterPopoverEl) monthFilterPopoverEl.removeAttribute('hidden');
+    if (monthFilterInputEl) monthFilterInputEl.value = selectedMonth;
+  } catch {}
+}
+function closeMonthPopover(){
+  try { monthFilterPopoverEl?.setAttribute('hidden',''); } catch {}
+}
+btnMonthFilterEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  try {
+    const isHidden = monthFilterPopoverEl?.hasAttribute('hidden');
+    if (isHidden) openMonthPopover(); else closeMonthPopover();
+  } catch {}
+});
+monthFilterInputEl?.addEventListener('change', async (e) => {
+  const val = (e.target?.value || '').trim();
+  if (!val) return;
+  selectedMonth = val;
+  storage.set('selectedMonth', selectedMonth);
+  closeMonthPopover();
+  try {
+    await hydrateAllData();
+  } catch {}
+  try {
+    const mg = await window.GoalsService?.fetchMonthlyGoalFor?.(selectedMonth);
+    if (mg && mg.target_amount != null) {
+      monthlyGoalsMap[selectedMonth] = Number(mg.target_amount)||0;
+      storage.set('monthlyGoals', monthlyGoalsMap);
+      // Atualiza imediatamente o campo da meta
+      if (goalAmountEl) goalAmountEl.value = String(monthlyGoalsMap[selectedMonth] ?? '');
+    } else {
+      // Limpa se não houver meta
+      if (goalAmountEl) goalAmountEl.value = '';
+    }
+  } catch {}
+  renderAll();
+});
+document.addEventListener('click', (e) => {
+  try {
+    if (!monthFilterPopoverEl || monthFilterPopoverEl.hasAttribute('hidden')) return;
+    const t = e.target;
+    if (monthFilterPopoverEl.contains(t) || btnMonthFilterEl?.contains(t)) return;
+    closeMonthPopover();
+  } catch {}
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMonthPopover(); });
 // Charts
 let pieChart, barChart, goalProgressChart, bankPieChart;
 
@@ -219,7 +262,92 @@ function updateAuthUI() {
   }
 }
 
+// Adiciona handlers de login/cadastro
+formLogin?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = loginEmailEl?.value?.trim();
+  const password = loginPasswordEl?.value || '';
+  authMsgEl && (authMsgEl.textContent = '');
+  if (!email || !password) {
+    authMsgEl && (authMsgEl.textContent = 'Informe email e senha');
+    return;
+  }
+  try {
+    if (!canUseSupabase() || !window.AuthService?.signIn) {
+      throw new Error('Supabase não configurado');
+    }
+    await window.AuthService.signIn({ email, password });
+    authMsgEl && (authMsgEl.textContent = 'Login realizado');
+    // Navega para dashboard; roteador resolve e monta página
+    location.hash = '#/dashboard';
+  } catch (err) {
+    const msg = (err && (err.message || err.error_description)) || 'Falha no login';
+    authMsgEl && (authMsgEl.textContent = String(msg));
+  }
+});
+
+formRegister?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = regNameEl?.value?.trim();
+  const email = regEmailEl?.value?.trim();
+  const password = regPasswordEl?.value || '';
+  authMsgEl && (authMsgEl.textContent = '');
+  if (!name || !email || !password) {
+    authMsgEl && (authMsgEl.textContent = 'Preencha nome, email e senha');
+    return;
+  }
+  try {
+    if (!canUseSupabase() || !window.AuthService?.signUp) {
+      throw new Error('Supabase não configurado');
+    }
+    await window.AuthService.signUp({ name, email, password });
+    authMsgEl && (authMsgEl.textContent = 'Cadastro realizado');
+    location.hash = '#/dashboard';
+  } catch (err) {
+    const msg = (err && (err.message || err.error_description)) || 'Falha no cadastro';
+    authMsgEl && (authMsgEl.textContent = String(msg));
+  }
+});
+
+// Alterna entre tabs login/cadastro
+function showAuthTab(tab) {
+  try {
+    document.querySelectorAll('.tabs-trigger').forEach((el) => {
+      const isActive = el.getAttribute('data-tab') === tab;
+      el.classList.toggle('active', isActive);
+    });
+    document.querySelectorAll('.tabs-content').forEach((el) => {
+      const isActive = el.getAttribute('data-tab') === tab;
+      // Garantir compatibilidade com CSS [hidden]
+      try { el.toggleAttribute('hidden', !isActive); } catch {}
+      // Manter compatibilidade com estilos inline existentes
+      el.style.display = isActive ? 'block' : 'none';
+    });
+    if (tab === 'login') {
+      loginEmailEl?.focus();
+    } else {
+      regNameEl?.focus();
+    }
+  } catch {}
+}
+
+// Conectar cliques das abas de login/cadastro
+try {
+  document.querySelectorAll('.tabs-trigger').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tab = btn.getAttribute('data-tab') || 'login';
+      showAuthTab(tab);
+    });
+  });
+} catch {}
+
+toggleToLoginEl?.addEventListener('click', () => showAuthTab('login'));
+
+toggleToRegisterEl?.addEventListener('click', () => showAuthTab('register'));
+
 // Gate simples na navegação
+function isUuid(v){ return typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v); }
+// Removido: syncLocalDataOnPageEnter (transferências automáticas). Hidratação centralizada via hydrateAllData.
 function showPage(route, opts = {}) {
   try {
     const AS = window.AuthService;
@@ -235,6 +363,9 @@ function showPage(route, opts = {}) {
     }
   } catch {}
 
+  // Hidratar dados ao entrar em qualquer página (não bloquear UI)
+  try { hydrateAllData().then(() => renderAll()).catch(()=>{}); } catch {}
+
   Object.values(pages).forEach(p => p?.classList.add('hidden'));
   navLinks.forEach(a => a.classList.remove('active'));
   pages[route]?.classList.remove('hidden');
@@ -246,7 +377,6 @@ function showPage(route, opts = {}) {
   if (pageTitleEl) pageTitleEl.textContent = titles[route] || 'Dashboard';
   const menuBtn = document.getElementById('btn-menu');
   if (menuBtn) menuBtn.hidden = (route === 'auth');
-  // Toggle modo auth para ajustar layout/ocultar sidebar/header
   const root = document.body;
   if (route === 'auth') { root.classList.add('auth-mode'); try { closeDrawer(); } catch {} } else { root.classList.remove('auth-mode'); }
   updateAuthUI();
@@ -265,6 +395,27 @@ window.App.showPage = showPage;
 // Drawer/Menu toggle logic
 const sidebarEl = document.querySelector('.sidebar');
 const drawerOverlayEl = document.getElementById('drawer-overlay') || document.querySelector('.drawer-overlay');
+
+// Logout
+btnLogoutEl?.addEventListener('click', async () => {
+  try { await window.AuthService?.signOut?.(); } catch {}
+  location.hash = '#/auth';
+});
+
+// Reage a mudanças de autenticação
+window.addEventListener('auth:change', (ev) => {
+  try { updateAuthUI(); } catch {}
+  const user = ev?.detail?.user || null;
+  if (user) {
+    if ((location.hash || '#/auth') === '#/auth') {
+      location.hash = '#/dashboard';
+    }
+    try { hydrateAllData().then(()=>renderAll()); } catch {}
+  } else {
+    location.hash = '#/auth';
+  }
+});
+
 function openDrawer() {
   try {
     sidebarEl?.classList.add('open');
@@ -382,17 +533,34 @@ function renderGoals() {
   if (goalAmountEl) goalAmountEl.value = getSelectedMonthlyGoalAmount() || '';
 }
 
-function renderBanks() {
-
+// Visibilidade do campo de banco conforme tipo de transação
+function updateBankVisibility(){
+  try {
+    if (!txBankGroupEl || !txTypeEl) return;
+    const isExpense = String(txTypeEl.value) === 'expense';
+    // Mostra o seletor de banco apenas para despesas
+    txBankGroupEl.style.display = isExpense ? '' : 'none';
+  } catch {}
 }
+// Mantém sincronizado quando o tipo muda
+try { txTypeEl?.addEventListener('change', updateBankVisibility); } catch {}
 
+// Renderização de bancos
 function renderBanks() {
   if (!gridBanksEl) return;
   gridBanksEl.innerHTML = banks.map(b => `
     <div class="bank-card">
       <div class="bank-header">
         <h3>${b.name}</h3>
-        <button class="action delete" data-id="${b.id}" aria-label="Excluir banco" title="Excluir" type="button"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg></button>
+        <button class="action delete" data-id="${b.id}" aria-label="Excluir banco" title="Excluir" type="button">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+            <path d="M10 11v6"></path>
+            <path d="M14 11v6"></path>
+            <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
+          </svg>
+        </button>
       </div>
     </div>
   `).join('');
@@ -412,318 +580,8 @@ function renderBanks() {
     });
   });
 }
-formBank?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const name = bankNameEl?.value.trim();
-  if (!name) return alert('Informe o nome do banco');
-  try {
-    if (canUseSupabase() && window.BanksService?.createBank) {
-      const created = await window.BanksService.createBank({ name });
-      banks.push({ id: created.id, name: created.name });
-    } else {
-      banks.push({ id: Date.now(), name });
-    }
-  } catch (err) {
-    console.warn('createBank supabase error, usando local:', err);
-    banks.push({ id: Date.now(), name });
-  }
-  storage.set('banks', banks);
-  if (bankNameEl) bankNameEl.value = '';
-  renderAll();
-});
 
-// Submissão de nova transação
-formTx?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const description = txDescriptionEl?.value?.trim();
-  const amount = Number(txAmountEl?.value || 0);
-  const date = txDateEl?.value || todayISO();
-  const type = txTypeEl?.value || 'expense';
-  const categoryId = txCategoryEl?.value || null;
-  const bankId = txBankEl?.value || null;
-  if (!description || !amount || !date || !type || !categoryId) {
-    return alert('Preencha todos os campos da transação');
-  }
-  try {
-    if (canUseSupabase() && window.TransactionsService?.createTransaction) {
-      const payload = mapLocalTransactionToDb({ description, amount, date, type, categoryId, bankId: type === 'expense' ? bankId || null : null });
-      const created = await window.TransactionsService.createTransaction(payload);
-      transactions.unshift(mapDbTransactionToLocal(created));
-    } else {
-      const local = { id: Date.now(), description, amount, date, type, categoryId, bankId: type === 'expense' ? bankId || null : null };
-      transactions.unshift(local);
-    }
-  } catch (err) {
-    console.warn('createTransaction supabase error, usando local:', err);
-    const local = { id: Date.now(), description, amount, date, type, categoryId, bankId: type === 'expense' ? bankId || null : null };
-    transactions.unshift(local);
-  }
-  storage.set('transactions', transactions);
-  if (txDescriptionEl) txDescriptionEl.value = '';
-  if (txAmountEl) txAmountEl.value = '';
-  if (txTypeEl) txTypeEl.value = 'expense';
-  updateBankVisibility();
-  renderAll();
-});
-
-// Submissão de nova categoria
-formCat?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const name = catNameEl?.value?.trim();
-  const color = catColorEl?.value || '#6200ee';
-  if (!name) return alert('Informe o nome da categoria');
-  try {
-    if (canUseSupabase() && window.CategoriesService?.createCategory) {
-      const created = await window.CategoriesService.createCategory({ name, color });
-      const item = { id: created.id || Date.now(), name: created.name || name, color: created.color || color };
-      categories.unshift(item);
-    } else {
-      categories.unshift({ id: Date.now(), name, color });
-    }
-  } catch (err) {
-    console.warn('createCategory supabase error, usando local:', err);
-    categories.unshift({ id: Date.now(), name, color });
-  }
-  storage.set('categories', categories);
-  if (catNameEl) catNameEl.value = '';
-  renderAll();
-});
-
-// Submissão da meta mensal
-formMonthlyGoal?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const amount = Number(goalAmountEl?.value || 0);
-  if (!amount || amount <= 0) return alert('Informe um valor válido para a meta');
-  try {
-    await saveMonthlyGoalForSelectedMonth(amount);
-  } catch (err) {
-    console.warn('saveMonthlyGoalFor error:', err);
-  }
-  renderAll();
-});
-
-// Roteamento por hash
-function getRouteFromHash() {
-  const hash = String(location.hash || '').toLowerCase();
-  if (hash.includes('#/dashboard')) return 'dashboard';
-  if (hash.includes('#/transactions')) return 'transactions';
-  if (hash.includes('#/categories')) return 'categories';
-  if (hash.includes('#/banks')) return 'banks';
-  if (hash.includes('#/goals')) return 'goals';
-  return 'auth';
-}
-function applyRouteFromHash() {
-  const route = getRouteFromHash();
-  showPage(route);
-}
-window.addEventListener('hashchange', applyRouteFromHash);
-
-// Sincroniza metas mensais do storage local para o banco (quando online)
-async function syncMonthlyGoalsFromLocal() {
-  try {
-    if (!canUseSupabase()) return;
-    const raw = localStorage.getItem('goalsService:monthlyGoalsMap');
-    const map = raw ? JSON.parse(raw) : {};
-    const entries = Object.entries(map || {});
-    if (!entries.length) return;
-    for (const [monthKey, amount] of entries) {
-      try { await window.GoalsService?.saveMonthlyGoalFor?.(monthKey, Number(amount)||0); } catch {}
-    }
-  } catch {}
-}
-
-// Auth listeners
-window.addEventListener('auth:change', async () => {
-  updateAuthUI();
-  try { await window.CategoriesService?.syncOutbox?.(); } catch {}
-  try { await window.BanksService?.syncOutbox?.(); } catch {}
-  try { await window.TransactionsService?.syncOutbox?.(); } catch {}
-  try { await syncMonthlyGoalsFromLocal(); } catch {}
-  if (canUseSupabase()) { try { await hydrateUserData(); } catch {} }
-  applyRouteFromHash();
-});
-
-// Ao voltar online, tenta sincronizar imediatamente e re-hidratar
-window.addEventListener('online', async () => {
-  try { await window.CategoriesService?.syncOutbox?.(); } catch {}
-  try { await window.BanksService?.syncOutbox?.(); } catch {}
-  try { await window.TransactionsService?.syncOutbox?.(); } catch {}
-  try { await syncMonthlyGoalsFromLocal(); } catch {}
-  try { await hydrateAllData(); } catch {}
-  renderAll();
-});
-btnLogoutEl?.addEventListener('click', async () => {
-  try { await window.AuthService?.signOut(); } catch {}
-  location.hash = '#/auth';
-});
-// Abas de autenticação (login/cadastrar)
-const authTabTriggers = Array.from(document.querySelectorAll('.tabs-trigger'));
-const authTabContents = Array.from(document.querySelectorAll('.tabs-content'));
-const showAuthTab = (name) => {
-  authTabContents.forEach((c) => {
-    if (c.dataset.tab === name) c.removeAttribute('hidden'); else c.setAttribute('hidden', '');
-  });
-  authTabTriggers.forEach((t) => {
-    t.classList.toggle('active', t.dataset.tab === name);
-  });
-  // Limpar mensagem ao alternar entre Entrar/Cadastrar
-  if (authMsgEl) authMsgEl.textContent = '';
-};
-authTabTriggers.forEach((btn) => {
-  btn.addEventListener('click', () => {
-    const tab = btn.dataset.tab || 'login';
-    showAuthTab(tab);
-    if (tab === 'login') loginEmailEl?.focus(); else regNameEl?.focus();
-  });
-});
-// Garantir aba inicial
-showAuthTab('login');
-
-toggleToLoginEl?.addEventListener('click', () => {
-  pages.auth?.classList.remove('hidden');
-  showAuthTab('login');
-  loginEmailEl?.focus();
-});
-
-toggleToRegisterEl?.addEventListener('click', () => {
-  pages.auth?.classList.remove('hidden');
-  showAuthTab('register');
-  regNameEl?.focus();
-});
-
-formLogin?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const email = loginEmailEl?.value?.trim();
-  const password = loginPasswordEl?.value || '';
-  authMsgEl.textContent = '';
-  try {
-    await window.AuthService?.signIn({ email, password });
-    authMsgEl.textContent = 'Login realizado com sucesso';
-    // Hidratar dados do usuário
-    try { await hydrateMonthlyGoalFromSupabase(); } catch {}
-    location.hash = '#/dashboard';
-  } catch (err) {
-    const raw = String(err?.message || '');
-    const isInvalid = /invalid login credentials/i.test(raw);
-    const isEmailNotConfirmed = /confirm/i.test(raw) && /email/i.test(raw);
-    if (isInvalid) {
-      authMsgEl.textContent = 'Não foi possível entrar. Verifique email e senha, ou se sua conta já foi criada.';
-    } else if (isEmailNotConfirmed) {
-      authMsgEl.textContent = 'Email não confirmado. Verifique sua caixa de entrada e confirme seu cadastro.';
-    } else {
-      authMsgEl.textContent = 'Não foi possível entrar. Verifique os dados e tente novamente.';
-    }
-    console.warn('Falha no login:', err);
-  }
-});
-
-formRegister?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const name = regNameEl?.value?.trim();
-  const email = regEmailEl?.value?.trim();
-  const password = regPasswordEl?.value || '';
-  authMsgEl.textContent = '';
-  try {
-    const res = await window.AuthService?.signUp({ name, email, password });
-    // Em ambientes sem confirmação de email, garantir sessão ativa
-    try { await window.AuthService?.signIn({ email, password }); } catch {}
-    authMsgEl.textContent = 'Conta criada e sessão iniciada';
-    try { await hydrateMonthlyGoalFromSupabase(); } catch {}
-    location.hash = '#/dashboard';
-  } catch (err) {
-    authMsgEl.textContent = (err?.message) || 'Falha no cadastro';
-    console.warn('Falha no cadastro:', err);
-  }
-});
-
-// ===== Funções auxiliares restauradas =====
-function updateBankVisibility() {
-  if (!txBankGroupEl || !txTypeEl) return;
-  txBankGroupEl.hidden = (txTypeEl.value !== 'expense');
-}
-// Atualiza visibilidade ao trocar tipo de transação
-try { txTypeEl?.addEventListener('change', updateBankVisibility); } catch {}
-
-function renderDashboard() {
-  // Resumo + barra de progresso da meta mensal
-  renderSummary();
-  const goal = getSelectedMonthlyGoalAmount();
-  const spent = monthlyExpenses();
-  const pct = budgetProgress();
-  if (progressFillEl) progressFillEl.style.width = Math.min(pct, 100) + '%';
-  if (progressSpentEl) progressSpentEl.textContent = formatCurrency(spent);
-  if (progressGoalEl) progressGoalEl.textContent = formatCurrency(goal);
-  if (progressPercentEl) progressPercentEl.textContent = pct.toFixed(1) + '%';
-  if (progressWarningEl) progressWarningEl.textContent = pct > 100 ? 'Meta mensal excedida' : '';
-  // Atualiza estatísticas grandes
-  if (goalSpentLargeEl) goalSpentLargeEl.textContent = formatCurrency(spent);
-  if (goalMetaLargeEl) goalMetaLargeEl.textContent = formatCurrency(goal);
-  if (goalRemainingTextEl) goalRemainingTextEl.textContent = `Restante: ${formatCurrency(Math.max(goal - spent, 0))}`;
-  // Renderiza gráficos
-  try { renderCharts(); } catch (e) { console.warn('Falha ao renderizar gráficos:', e); }
-}
-
-function renderCharts() {
-  // Pizza por categoria
-  const ctxCat = document.getElementById('pie-expenses-by-category');
-  if (ctxCat && typeof Chart !== 'undefined') {
-    const byCat = expensesByCat();
-    const catIds = Object.keys(byCat);
-    const labels = catIds.map(id => {
-      const c = categories.find(c => String(c.id) === String(id));
-      return c?.name || (id==='undefined' ? 'Sem categoria' : 'Sem categoria');
-    });
-    const dataVals = catIds.map(id => byCat[id]);
-    const colors = catIds.map(id => {
-      const c = categories.find(c => String(c.id) === String(id));
-      return c?.color || '#999999';
-    });
-    try { if (pieChart) { pieChart.destroy(); } } catch {}
-    pieChart = new Chart(ctxCat, {
-      type: 'pie',
-      data: { labels, datasets: [{ data: dataVals, backgroundColor: colors }] },
-      options: { plugins: { legend: { position: 'bottom' } } }
-    });
-  }
-  // Pizza por banco
-  const ctxBank = document.getElementById('pie-expenses-by-bank');
-  if (ctxBank && typeof Chart !== 'undefined') {
-    const byBank = expensesByBank();
-    const bankIds = Object.keys(byBank);
-    const labels = bankIds.map(id => {
-      if (id === 'cash') return 'Dinheiro';
-      const b = banks.find(b => String(b.id) === String(id));
-      return b?.name || 'Banco';
-    });
-    const dataVals = bankIds.map(id => byBank[id]);
-    const colors = bankIds.map((_, idx) => `hsl(${(idx*57)%360}deg 65% 60%)`);
-    try { if (bankPieChart) { bankPieChart.destroy(); } } catch {}
-    bankPieChart = new Chart(ctxBank, {
-      type: 'pie',
-      data: { labels, datasets: [{ data: dataVals, backgroundColor: colors }] },
-      options: { plugins: { legend: { position: 'bottom' } } }
-    });
-  }
-  // Barras: Receita vs Despesa
-  const ctxBar = document.getElementById('bar-income-vs-expense');
-  if (ctxBar && typeof Chart !== 'undefined') {
-    const inc = monthlyIncome();
-    const exp = monthlyExpenses();
-    try { if (barChart) { barChart.destroy(); } } catch {}
-    barChart = new Chart(ctxBar, {
-      type: 'bar',
-      data: {
-        labels: ['Receitas','Despesas'],
-        datasets: [{ data: [inc, exp], backgroundColor: ['#2e7d32','#c62828'] }]
-      },
-      options: {
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
-      }
-    });
-  }
-}
-
+// Renderização geral
 function renderAll() {
   try {
     renderSummary();
@@ -731,151 +589,11 @@ function renderAll() {
     renderCategories();
     renderGoals();
     renderBanks();
-    renderDashboard();
+    if (typeof renderDashboard === 'function') { renderDashboard(); }
     ensureCategoryProgressCard();
   } catch (err) {
     console.warn('Falha ao renderizar:', err);
   }
 }
 
-async function hydrateMonthlyGoalFromSupabase() {
-  try {
-    if (canUseSupabase() && window.GoalsService?.fetchMonthlyGoal) {
-      const res = await window.GoalsService.fetchMonthlyGoal();
-      if (res && res.target_amount != null) {
-        monthlyGoal.amount = Number(res.target_amount);
-        storage.set('monthlyGoal', monthlyGoal);
-      }
-    }
-  } catch (err) {
-    console.warn('hydrateMonthlyGoalFromSupabase error:', err);
-  }
-}
-
-async function hydrateAllData() {
-  try {
-    if (canUseSupabase()) {
-      try {
-        const cats = await window.CategoriesService?.fetchCategories?.();
-        if (Array.isArray(cats) && cats.length) {
-          categories = cats.map(c => ({ id: c.id, name: c.name, color: c.color }));
-          storage.set('categories', categories);
-        }
-      } catch (err) { console.warn('hydrate categories error:', err); }
-      try {
-        const bks = await window.BanksService?.fetchBanks?.();
-        if (Array.isArray(bks)) {
-          banks = bks.map(b => ({ id: b.id, name: b.name }));
-          storage.set('banks', banks);
-        }
-      } catch (err) { console.warn('hydrate banks error:', err); }
-      try {
-        // Buscar somente transações do mês selecionado para aliviar o servidor
-        const txs = await window.TransactionsService?.fetchTransactionsByMonth?.(selectedMonth);
-        transactions = Array.isArray(txs) ? txs.map(mapDbTransactionToLocal) : [];
-        storage.set('transactions', transactions);
-      } catch (err) { console.warn('hydrate transactions error:', err); }
-      try {
-        const goals = await window.GoalsService?.fetchGoals?.();
-        if (Array.isArray(goals)) {
-          categoryGoals = goals.filter(g => g.category_id).map(g => ({ id: g.id, categoryId: String(g.category_id), amount: Number(g.target_amount || 0) }));
-          storage.set('categoryGoals', categoryGoals);
-        }
-      } catch (err) { console.warn('hydrate goals error:', err); }
-      try { await hydrateMonthlyGoalFromSupabase(); } catch {}
-    }
-  } catch (err) {
-    console.warn('hydrateAllData error:', err);
-  }
-}
-
-async function hydrateUserData() {
-  await hydrateAllData();
-}
-
-// Mês global: UI
-const btnMonthFilterEl = document.getElementById('btn-month-filter');
-const monthFilterInputEl = document.getElementById('month-filter-input');
-const monthFilterPopoverEl = document.getElementById('month-filter-popover');
-function toggleMonthPopover() {
-  if (!monthFilterPopoverEl) return;
-  const willShow = !!monthFilterPopoverEl.hidden;
-  monthFilterPopoverEl.hidden = !willShow;
-  if (willShow && monthFilterInputEl) monthFilterInputEl.value = selectedMonth;
-}
-btnMonthFilterEl?.addEventListener('click', (e) => { e.stopPropagation(); toggleMonthPopover(); });
-monthFilterInputEl?.addEventListener('change', async () => {
-  const val = monthFilterInputEl.value;
-  if (!val) return;
-  selectedMonth = val;
-  storage.set('selectedMonth', selectedMonth);
-  // Quando Supabase estiver habilitado, refaz a consulta por mês (created_at)
-  try {
-    if (canUseSupabase() && window.TransactionsService?.fetchTransactionsByMonth) {
-      const txs = await window.TransactionsService.fetchTransactionsByMonth(selectedMonth);
-      transactions = Array.isArray(txs) ? txs.map(mapDbTransactionToLocal) : [];
-      storage.set('transactions', transactions);
-    }
-  } catch (err) {
-    console.warn('fetchTransactionsByMonth error:', err);
-  }
-  await ensureMonthlyGoalForSelectedMonth();
-  renderAll();
-});
-document.addEventListener('click', (e) => {
-  if (!monthFilterPopoverEl) return;
-  if (monthFilterPopoverEl.hidden) return;
-  if (!monthFilterPopoverEl.contains(e.target) && e.target !== btnMonthFilterEl) {
-    monthFilterPopoverEl.hidden = true;
-  }
-});
-
-async function ensureMonthlyGoalForSelectedMonth() {
-  const key = selectedMonth;
-  // Se já temos no mapa, nada a fazer
-  if (monthlyGoalsMap[key] != null) {
-    storage.set('monthlyGoals', monthlyGoalsMap);
-    return;
-  }
-  try {
-    if (window.GoalsService?.fetchMonthlyGoalFor) {
-      const found = await window.GoalsService.fetchMonthlyGoalFor(key);
-      if (found && found.target_amount != null) {
-        monthlyGoalsMap[key] = Number(found.target_amount) || 0;
-      } else {
-        // Não existe no banco: criar automaticamente com valor padrão
-        await saveMonthlyGoalForSelectedMonth(DEFAULT_MONTHLY_GOAL);
-      }
-    } else {
-      // Sem serviço: usar valor padrão local
-      monthlyGoalsMap[key] = Number(DEFAULT_MONTHLY_GOAL);
-    }
-  } catch (e) {
-    console.warn('ensureMonthlyGoalForSelectedMonth error:', e);
-    monthlyGoalsMap[key] = Number(DEFAULT_MONTHLY_GOAL);
-  }
-  storage.set('monthlyGoals', monthlyGoalsMap);
-}
-async function saveMonthlyGoalForSelectedMonth(amount) {
-  const key = selectedMonth;
-  monthlyGoalsMap[key] = Number(amount)||0;
-  storage.set('monthlyGoals', monthlyGoalsMap);
-  try {
-    if (window.GoalsService?.saveMonthlyGoalFor) {
-      await window.GoalsService.saveMonthlyGoalFor(key, Number(amount)||0);
-    }
-  } catch (e) { console.warn('saveMonthlyGoalFor supabase error:', e); }
-}
-
-// Submissão de meta mensal
-formMonthlyGoal?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const amount = Number(goalAmountEl?.value || 0);
-  if (!amount) return alert('Informe a meta mensal');
-  try {
-    await saveMonthlyGoalForSelectedMonth(amount);
-  } catch (err) {
-    console.warn('saveMonthlyGoalFor error:', err);
-  }
-  renderAll();
-});
+// ... existing code ...

@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 
 Add-Type -AssemblyName System.Web
 $listener = New-Object System.Net.HttpListener
-$prefix = "http://localhost:$Port/"
+$prefix = "http://127.0.0.1:$Port/"
 $listener.Prefixes.Add($prefix)
 $listener.Start()
 Write-Host "Servidor iniciado em $prefix servindo $(Get-Location)"
