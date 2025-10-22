@@ -56,6 +56,19 @@
     writeLocal(items);
     return items.find(g => (g.name || '').toLowerCase() === 'monthly');
   };
+  // novo: meta por mês específico
+  const localSaveMonthlyGoalFor = (monthKey, amount) => {
+    const items = readLocal();
+    const targetName = `monthly:${monthKey}`;
+    const idx = items.findIndex(g => (g.name || '').toLowerCase() === targetName.toLowerCase());
+    if (idx >= 0) {
+      items[idx] = { ...items[idx], target_amount: amount };
+    } else {
+      items.unshift({ id: crypto.randomUUID(), name: targetName, target_amount: amount, created_at: new Date().toISOString() });
+    }
+    writeLocal(items);
+    return items.find(g => (g.name || '').toLowerCase() === targetName.toLowerCase());
+  };
 
   const supabaseTable = 'goals';
 
@@ -145,6 +158,13 @@
     return monthly;
   };
 
+  const fetchMonthlyGoalFor = async (monthKey) => {
+    const items = await fetchGoals();
+    const name = `monthly:${monthKey}`;
+    const monthly = items.find(g => (g.name || '').toLowerCase() === name.toLowerCase()) || null;
+    return monthly;
+  };
+
   const saveMonthlyGoal = async (amount) => {
     if (!isSupabaseEnabled()) {
       return localSaveMonthlyGoal(amount);
@@ -188,6 +208,50 @@
     }
   };
 
+  const saveMonthlyGoalFor = async (monthKey, amount) => {
+    const name = `monthly:${monthKey}`;
+    if (!isSupabaseEnabled()) {
+      return localSaveMonthlyGoalFor(monthKey, amount);
+    }
+    const uid = await getUserId();
+    if (!uid) return localSaveMonthlyGoalFor(monthKey, amount);
+
+    const { data: existing } = await window.Supabase
+      .from(supabaseTable)
+      .select('*')
+      .eq('name', name)
+      .eq('user_id', uid)
+      .limit(1)
+      .maybeSingle();
+
+    if (existing && existing.id) {
+      const { data, error } = await window.Supabase
+        .from(supabaseTable)
+        .update({ target_amount: amount })
+        .eq('id', existing.id)
+        .select('*')
+        .single();
+      if (error) { console.warn('saveMonthlyGoalFor update error:', error); }
+      const items = readLocal();
+      const idx = items.findIndex(g => g.id === existing.id);
+      if (idx >= 0) items[idx] = data; else items.unshift(data);
+      writeLocal(items);
+      return data;
+    } else {
+      const toInsert = { name, target_amount: amount, user_id: uid };
+      const { data, error } = await window.Supabase
+        .from(supabaseTable)
+        .insert(toInsert)
+        .select('*')
+        .single();
+      if (error) { console.warn('saveMonthlyGoalFor insert error:', error); return localSaveMonthlyGoalFor(monthKey, amount); }
+      const items = readLocal();
+      items.unshift(data);
+      writeLocal(items);
+      return data;
+    }
+  };
+
   window.GoalsService = {
     fetchGoals,
     createGoal,
@@ -196,5 +260,88 @@
     isSupabaseEnabled,
     fetchMonthlyGoal,
     saveMonthlyGoal,
+    fetchMonthlyGoalFor,
+    saveMonthlyGoalFor,
   };
+})();
+(function(){
+  const LS_PREFIX = 'goalsService:';
+  function lsGet(key, fallback){
+    try { const raw = localStorage.getItem(LS_PREFIX+key); return raw ? JSON.parse(raw) : fallback; } catch { return fallback; }
+  }
+  function lsSet(key, val){ localStorage.setItem(LS_PREFIX+key, JSON.stringify(val)); }
+
+  async function localSaveMonthlyGoalFor(monthKey, amount){
+    const map = lsGet('monthlyGoalsMap', {});
+    map[monthKey] = Number(amount)||0;
+    lsSet('monthlyGoalsMap', map);
+    return { month_key: monthKey, target_amount: Number(amount)||0 };
+  }
+  async function fetchMonthlyGoalFor(monthKey){
+    if (window.__ENV?.USE_SUPABASE) {
+      try {
+        const sup = window.SupabaseService;
+        const userId = window.AuthService?.getUser()?.id;
+        if (!sup || !userId) return lsGet('monthlyGoalsMap', {})[monthKey] != null ? { month_key: monthKey, target_amount: Number(lsGet('monthlyGoalsMap', {})[monthKey]) } : null;
+        const { data, error } = await sup.client
+          .from('monthly_goals')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('month_key', monthKey)
+          .limit(1)
+          .maybeSingle();
+        if (error) throw error;
+        return data ? { month_key: data.month_key, target_amount: Number(data.target_amount)||0 } : null;
+      } catch (e) {
+        const map = lsGet('monthlyGoalsMap', {});
+        return map[monthKey] != null ? { month_key: monthKey, target_amount: Number(map[monthKey]) } : null;
+      }
+    } else {
+      const map = lsGet('monthlyGoalsMap', {});
+      return map[monthKey] != null ? { month_key: monthKey, target_amount: Number(map[monthKey]) } : null;
+    }
+  }
+  async function saveMonthlyGoalFor(monthKey, amount){
+    if (window.__ENV?.USE_SUPABASE) {
+      try {
+        const sup = window.SupabaseService;
+        const userId = window.AuthService?.getUser()?.id;
+        if (!sup || !userId) return localSaveMonthlyGoalFor(monthKey, amount);
+        const payload = { user_id: userId, month_key: monthKey, target_amount: Number(amount)||0 };
+        const { data, error } = await sup.client
+          .from('monthly_goals')
+          .upsert(payload, { onConflict: 'user_id,month_key' })
+          .select('*')
+          .limit(1)
+          .maybeSingle();
+        if (error) throw error;
+        await localSaveMonthlyGoalFor(monthKey, Number(amount)||0);
+        return { month_key: data.month_key, target_amount: Number(data.target_amount)||0 };
+      } catch (e) {
+        return localSaveMonthlyGoalFor(monthKey, Number(amount)||0);
+      }
+    } else {
+      return localSaveMonthlyGoalFor(monthKey, Number(amount)||0);
+    }
+  }
+
+  // Legacy single goal helpers
+  async function fetchMonthlyGoal(){
+    const map = lsGet('monthlyGoalsMap', {});
+    const currentKey = new Date().toISOString().slice(0,7);
+    const amount = map[currentKey] ?? lsGet('legacyMonthlyGoal', 2000);
+    return { month_key: currentKey, target_amount: Number(amount)||0 };
+  }
+  async function saveMonthlyGoal(amount){
+    lsSet('legacyMonthlyGoal', Number(amount)||0);
+    const currentKey = new Date().toISOString().slice(0,7);
+    await localSaveMonthlyGoalFor(currentKey, Number(amount)||0);
+    return { month_key: currentKey, target_amount: Number(amount)||0 };
+  }
+
+  window.GoalsService = window.GoalsService || {};
+  window.GoalsService.fetchMonthlyGoalFor = fetchMonthlyGoalFor;
+  window.GoalsService.saveMonthlyGoalFor = saveMonthlyGoalFor;
+  window.GoalsService.fetchMonthlyGoal = fetchMonthlyGoal;
+  window.GoalsService.saveMonthlyGoal = saveMonthlyGoal;
 })();

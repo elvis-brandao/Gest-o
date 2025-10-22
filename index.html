@@ -15,7 +15,11 @@
     <!-- Chart.js via CDN -->
      <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
      <!-- Supabase env and client (safe-load) -->
-  <script src="assets/js/env.js"></script>
+  <meta name="ENV_SUPABASE_URL" content="">
+  <meta name="ENV_SUPABASE_ANON_KEY" content="">
+  <!-- Habilite leitura de .env localmente: defina como true -->
+    <meta name="ENV_USE_DOTENV" content="true">
+    <script src="assets/js/env.js"></script>
      <script type="module" src="assets/js/core/supabaseClient.js"></script>
   </head>
   <body>
@@ -116,12 +120,26 @@
 
       <div class="content">
         <header class="header">
-          <div class="header-left">
-            <div class="header-controls">
-              <button id="btn-menu" class="btn-menu" aria-label="Menu">☰</button>
+          <div class="header-inner" style="display:grid; grid-template-columns: auto 1fr auto; align-items:center; position:relative; width:100%;">
+            <div class="header-left" style="justify-self:start;">
+              <div class="header-controls">
+                <button id="btn-menu" class="btn-menu" aria-label="Menu">☰</button>
+              </div>
             </div>
-            <div class="header-title">
+            <div class="header-title" style="justify-self:center;">
               <h1 id="page-title">Dashboard</h1>
+            </div>
+            <div class="header-right" style="justify-self:end; position:relative;">
+              <button id="btn-month-filter" class="icon-button" title="Filtrar mês" aria-label="Filtrar mês">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 5h18l-7 8v6l-4-2v-4L3 5z" fill="currentColor" />
+                </svg>
+              </button>
+              <div id="month-filter-popover" class="popover" hidden style="position:absolute; right:0; top:48px; background:#fff; border:1px solid #ddd; border-radius:8px; padding:12px; box-shadow:0 6px 20px rgba(0,0,0,0.12);">
+                <label for="month-filter-input" style="font-size:12px;color:#666;">Mês/Ano</label>
+                <input id="month-filter-input" type="month" style="margin-top:4px;" />
+                <p style="font-size:11px;color:#888;margin-top:8px;max-width:220px;">Ao alterar o mês, o dashboard, transações e meta serão filtrados.</p>
+              </div>
             </div>
           </div>
         </header>
@@ -326,6 +344,21 @@
                   <canvas id="pie-expenses-by-bank"></canvas>
                 </div>
                 <div id="pie-info-banks" class="chart-info"></div>
+              </div>
+              <div class="card shadow-sm">
+                <h2 class="card-title">
+                  <span class="icon-chart" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="4" y="10" width="4" height="8"></rect>
+                      <rect x="10" y="6" width="4" height="12"></rect>
+                      <rect x="16" y="12" width="4" height="6"></rect>
+                    </svg>
+                  </span>
+                  Receitas vs Despesas
+                </h2>
+                <div class="chart-wide">
+                  <canvas id="bar-income-vs-expense"></canvas>
+                </div>
               </div>
             </div>
           </section>
@@ -539,7 +572,13 @@
     <script type="module" src="assets/js/main.js"></script>
     <script src="assets/js/services/goalsService.js"></script>
      <script>
-      // Registrar Service Worker apenas fora de localhost para evitar cache durante desenvolvimento
+      // Em localhost: desregistrar SW para evitar cache antigo interferindo
+      if ('serviceWorker' in navigator && location.hostname === 'localhost') {
+        navigator.serviceWorker.getRegistrations().then(rs => {
+          rs.forEach(r => r.unregister());
+        }).catch(() => {});
+      }
+      // Fora de localhost: registrar SW normalmente
       if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/service-worker.js').catch(() => {});

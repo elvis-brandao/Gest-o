@@ -1,6 +1,25 @@
 // Utilidades
 const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value||0));
 const todayISO = () => new Date().toISOString().split('T')[0];
+const getMonthKeyFromDate = (dateStr) => {
+  const d = new Date(dateStr);
+  const y = d.getFullYear();
+  const m = (d.getMonth()+1).toString().padStart(2,'0');
+  return `${y}-${m}`;
+};
+const getCurrentMonthKey = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = (d.getMonth()+1).toString().padStart(2,'0');
+  return `${y}-${m}`;
+};
+const getPrevMonthKey = (monthKey) => {
+  const [y,m] = monthKey.split('-').map(Number);
+  const d = new Date(y, m-2, 1);
+  const yy = d.getFullYear();
+  const mm = (d.getMonth()+1).toString().padStart(2,'0');
+  return `${yy}-${mm}`;
+};
 
 // Persistência (localStorage)
 const storage = {
@@ -10,6 +29,9 @@ const storage = {
   },
   set(key, value) { localStorage.setItem(key, JSON.stringify(value)); },
 };
+
+// Valor padrão para meta mensal quando não existe registro
+const DEFAULT_MONTHLY_GOAL = 5000;
 
 // Estado
 let transactions = storage.get('transactions', []);
@@ -26,6 +48,9 @@ let categories = storage.get('categories', [
 let monthlyGoal = storage.get('monthlyGoal', { amount: 2000 });
 let categoryGoals = storage.get('categoryGoals', []);
 let banks = storage.get('banks', []);
+let selectedMonth = storage.get('selectedMonth', getCurrentMonthKey());
+let monthlyGoalsMap = storage.get('monthlyGoals', {});
+const getSelectedMonthlyGoalAmount = () => Number(monthlyGoalsMap[selectedMonth] ?? monthlyGoal.amount ?? 0);
 
 // Helpers Supabase/Mapeamentos
 function canUseSupabase() {
@@ -40,6 +65,7 @@ function mapDbTransactionToLocal(row) {
     description: row.description,
     amount: Number(row.amount),
     date: row.occurred_at,
+    createdAt: row.created_at,
     type: row.type,
     categoryId: row.category_id != null ? String(row.category_id) : null,
     bankId: row.bank_id != null ? String(row.bank_id) : null,
@@ -57,12 +83,10 @@ function mapLocalTransactionToDb(tx) {
 }
 // Helpers de cálculo
 const currentMonthTransactions = () => {
-  const now = new Date();
-  const m = now.getMonth();
-  const y = now.getFullYear();
+  const [yy, mm] = String(selectedMonth).split('-').map(Number);
   return transactions.filter(t => {
     const d = new Date(t.date);
-    return d.getMonth() === m && d.getFullYear() === y;
+    return d.getFullYear() === yy && (d.getMonth() + 1) === mm;
   });
 };
 const monthlyIncome = () => currentMonthTransactions().filter(t => t.type==='income').reduce((s,t)=>s+Number(t.amount),0);
@@ -85,9 +109,9 @@ const expensesByBank = () => {
   });
   return map;
 };
-const remainingBudget = () => Number(monthlyGoal.amount) - monthlyExpenses();
+const remainingBudget = () => getSelectedMonthlyGoalAmount() - monthlyExpenses();
 const budgetProgress = () => {
-  const goal = Number(monthlyGoal.amount) || 0;
+  const goal = getSelectedMonthlyGoalAmount();
   return goal>0 ? (monthlyExpenses()/goal)*100 : 0;
 };
 
@@ -101,6 +125,11 @@ const pages = {
   auth: document.getElementById('page-auth'),
 };
 const navLinks = Array.from(document.querySelectorAll('.nav-link'));
+// Removido: duplicatas de declarações de resumo e progresso
+// Adiciona refs para estatísticas grandes da meta
+const goalSpentLargeEl = document.getElementById('goal-spent-large');
+const goalMetaLargeEl = document.getElementById('goal-meta-large');
+const goalRemainingTextEl = document.getElementById('goal-remaining-text');
 const summaryIncomeEl = document.getElementById('summary-income');
 const summaryExpenseEl = document.getElementById('summary-expense');
 const summaryBalanceEl = document.getElementById('summary-balance');
@@ -350,7 +379,7 @@ function renderCategories() {
 }
 
 function renderGoals() {
-  if (goalAmountEl) goalAmountEl.value = monthlyGoal.amount || '';
+  if (goalAmountEl) goalAmountEl.value = getSelectedMonthlyGoalAmount() || '';
 }
 
 function renderBanks() {
@@ -403,6 +432,76 @@ formBank?.addEventListener('submit', async (e) => {
   renderAll();
 });
 
+// Submissão de nova transação
+formTx?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const description = txDescriptionEl?.value?.trim();
+  const amount = Number(txAmountEl?.value || 0);
+  const date = txDateEl?.value || todayISO();
+  const type = txTypeEl?.value || 'expense';
+  const categoryId = txCategoryEl?.value || null;
+  const bankId = txBankEl?.value || null;
+  if (!description || !amount || !date || !type || !categoryId) {
+    return alert('Preencha todos os campos da transação');
+  }
+  try {
+    if (canUseSupabase() && window.TransactionsService?.createTransaction) {
+      const payload = mapLocalTransactionToDb({ description, amount, date, type, categoryId, bankId: type === 'expense' ? bankId || null : null });
+      const created = await window.TransactionsService.createTransaction(payload);
+      transactions.unshift(mapDbTransactionToLocal(created));
+    } else {
+      const local = { id: Date.now(), description, amount, date, type, categoryId, bankId: type === 'expense' ? bankId || null : null };
+      transactions.unshift(local);
+    }
+  } catch (err) {
+    console.warn('createTransaction supabase error, usando local:', err);
+    const local = { id: Date.now(), description, amount, date, type, categoryId, bankId: type === 'expense' ? bankId || null : null };
+    transactions.unshift(local);
+  }
+  storage.set('transactions', transactions);
+  if (txDescriptionEl) txDescriptionEl.value = '';
+  if (txAmountEl) txAmountEl.value = '';
+  if (txTypeEl) txTypeEl.value = 'expense';
+  updateBankVisibility();
+  renderAll();
+});
+
+// Submissão de nova categoria
+formCat?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = catNameEl?.value?.trim();
+  const color = catColorEl?.value || '#6200ee';
+  if (!name) return alert('Informe o nome da categoria');
+  try {
+    if (canUseSupabase() && window.CategoriesService?.createCategory) {
+      const created = await window.CategoriesService.createCategory({ name, color });
+      const item = { id: created.id || Date.now(), name: created.name || name, color: created.color || color };
+      categories.unshift(item);
+    } else {
+      categories.unshift({ id: Date.now(), name, color });
+    }
+  } catch (err) {
+    console.warn('createCategory supabase error, usando local:', err);
+    categories.unshift({ id: Date.now(), name, color });
+  }
+  storage.set('categories', categories);
+  if (catNameEl) catNameEl.value = '';
+  renderAll();
+});
+
+// Submissão da meta mensal
+formMonthlyGoal?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const amount = Number(goalAmountEl?.value || 0);
+  if (!amount || amount <= 0) return alert('Informe um valor válido para a meta');
+  try {
+    await saveMonthlyGoalForSelectedMonth(amount);
+  } catch (err) {
+    console.warn('saveMonthlyGoalFor error:', err);
+  }
+  renderAll();
+});
+
 // Roteamento por hash
 function getRouteFromHash() {
   const hash = String(location.hash || '').toLowerCase();
@@ -419,12 +518,39 @@ function applyRouteFromHash() {
 }
 window.addEventListener('hashchange', applyRouteFromHash);
 
+// Sincroniza metas mensais do storage local para o banco (quando online)
+async function syncMonthlyGoalsFromLocal() {
+  try {
+    if (!canUseSupabase()) return;
+    const raw = localStorage.getItem('goalsService:monthlyGoalsMap');
+    const map = raw ? JSON.parse(raw) : {};
+    const entries = Object.entries(map || {});
+    if (!entries.length) return;
+    for (const [monthKey, amount] of entries) {
+      try { await window.GoalsService?.saveMonthlyGoalFor?.(monthKey, Number(amount)||0); } catch {}
+    }
+  } catch {}
+}
+
 // Auth listeners
 window.addEventListener('auth:change', async () => {
   updateAuthUI();
   try { await window.CategoriesService?.syncOutbox?.(); } catch {}
-  if (canUseSupabase()) { hydrateUserData(); }
+  try { await window.BanksService?.syncOutbox?.(); } catch {}
+  try { await window.TransactionsService?.syncOutbox?.(); } catch {}
+  try { await syncMonthlyGoalsFromLocal(); } catch {}
+  if (canUseSupabase()) { try { await hydrateUserData(); } catch {} }
   applyRouteFromHash();
+});
+
+// Ao voltar online, tenta sincronizar imediatamente e re-hidratar
+window.addEventListener('online', async () => {
+  try { await window.CategoriesService?.syncOutbox?.(); } catch {}
+  try { await window.BanksService?.syncOutbox?.(); } catch {}
+  try { await window.TransactionsService?.syncOutbox?.(); } catch {}
+  try { await syncMonthlyGoalsFromLocal(); } catch {}
+  try { await hydrateAllData(); } catch {}
+  renderAll();
 });
 btnLogoutEl?.addEventListener('click', async () => {
   try { await window.AuthService?.signOut(); } catch {}
@@ -521,7 +647,7 @@ try { txTypeEl?.addEventListener('change', updateBankVisibility); } catch {}
 function renderDashboard() {
   // Resumo + barra de progresso da meta mensal
   renderSummary();
-  const goal = Number(monthlyGoal.amount) || 0;
+  const goal = getSelectedMonthlyGoalAmount();
   const spent = monthlyExpenses();
   const pct = budgetProgress();
   if (progressFillEl) progressFillEl.style.width = Math.min(pct, 100) + '%';
@@ -529,6 +655,73 @@ function renderDashboard() {
   if (progressGoalEl) progressGoalEl.textContent = formatCurrency(goal);
   if (progressPercentEl) progressPercentEl.textContent = pct.toFixed(1) + '%';
   if (progressWarningEl) progressWarningEl.textContent = pct > 100 ? 'Meta mensal excedida' : '';
+  // Atualiza estatísticas grandes
+  if (goalSpentLargeEl) goalSpentLargeEl.textContent = formatCurrency(spent);
+  if (goalMetaLargeEl) goalMetaLargeEl.textContent = formatCurrency(goal);
+  if (goalRemainingTextEl) goalRemainingTextEl.textContent = `Restante: ${formatCurrency(Math.max(goal - spent, 0))}`;
+  // Renderiza gráficos
+  try { renderCharts(); } catch (e) { console.warn('Falha ao renderizar gráficos:', e); }
+}
+
+function renderCharts() {
+  // Pizza por categoria
+  const ctxCat = document.getElementById('pie-expenses-by-category');
+  if (ctxCat && typeof Chart !== 'undefined') {
+    const byCat = expensesByCat();
+    const catIds = Object.keys(byCat);
+    const labels = catIds.map(id => {
+      const c = categories.find(c => String(c.id) === String(id));
+      return c?.name || (id==='undefined' ? 'Sem categoria' : 'Sem categoria');
+    });
+    const dataVals = catIds.map(id => byCat[id]);
+    const colors = catIds.map(id => {
+      const c = categories.find(c => String(c.id) === String(id));
+      return c?.color || '#999999';
+    });
+    try { if (pieChart) { pieChart.destroy(); } } catch {}
+    pieChart = new Chart(ctxCat, {
+      type: 'pie',
+      data: { labels, datasets: [{ data: dataVals, backgroundColor: colors }] },
+      options: { plugins: { legend: { position: 'bottom' } } }
+    });
+  }
+  // Pizza por banco
+  const ctxBank = document.getElementById('pie-expenses-by-bank');
+  if (ctxBank && typeof Chart !== 'undefined') {
+    const byBank = expensesByBank();
+    const bankIds = Object.keys(byBank);
+    const labels = bankIds.map(id => {
+      if (id === 'cash') return 'Dinheiro';
+      const b = banks.find(b => String(b.id) === String(id));
+      return b?.name || 'Banco';
+    });
+    const dataVals = bankIds.map(id => byBank[id]);
+    const colors = bankIds.map((_, idx) => `hsl(${(idx*57)%360}deg 65% 60%)`);
+    try { if (bankPieChart) { bankPieChart.destroy(); } } catch {}
+    bankPieChart = new Chart(ctxBank, {
+      type: 'pie',
+      data: { labels, datasets: [{ data: dataVals, backgroundColor: colors }] },
+      options: { plugins: { legend: { position: 'bottom' } } }
+    });
+  }
+  // Barras: Receita vs Despesa
+  const ctxBar = document.getElementById('bar-income-vs-expense');
+  if (ctxBar && typeof Chart !== 'undefined') {
+    const inc = monthlyIncome();
+    const exp = monthlyExpenses();
+    try { if (barChart) { barChart.destroy(); } } catch {}
+    barChart = new Chart(ctxBar, {
+      type: 'bar',
+      data: {
+        labels: ['Receitas','Despesas'],
+        datasets: [{ data: [inc, exp], backgroundColor: ['#2e7d32','#c62828'] }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+      }
+    });
+  }
 }
 
 function renderAll() {
@@ -577,11 +770,10 @@ async function hydrateAllData() {
         }
       } catch (err) { console.warn('hydrate banks error:', err); }
       try {
-        const txs = await window.TransactionsService?.fetchTransactions?.();
-        if (Array.isArray(txs)) {
-          transactions = txs.map(mapDbTransactionToLocal);
-          storage.set('transactions', transactions);
-        }
+        // Buscar somente transações do mês selecionado para aliviar o servidor
+        const txs = await window.TransactionsService?.fetchTransactionsByMonth?.(selectedMonth);
+        transactions = Array.isArray(txs) ? txs.map(mapDbTransactionToLocal) : [];
+        storage.set('transactions', transactions);
       } catch (err) { console.warn('hydrate transactions error:', err); }
       try {
         const goals = await window.GoalsService?.fetchGoals?.();
@@ -600,3 +792,90 @@ async function hydrateAllData() {
 async function hydrateUserData() {
   await hydrateAllData();
 }
+
+// Mês global: UI
+const btnMonthFilterEl = document.getElementById('btn-month-filter');
+const monthFilterInputEl = document.getElementById('month-filter-input');
+const monthFilterPopoverEl = document.getElementById('month-filter-popover');
+function toggleMonthPopover() {
+  if (!monthFilterPopoverEl) return;
+  const willShow = !!monthFilterPopoverEl.hidden;
+  monthFilterPopoverEl.hidden = !willShow;
+  if (willShow && monthFilterInputEl) monthFilterInputEl.value = selectedMonth;
+}
+btnMonthFilterEl?.addEventListener('click', (e) => { e.stopPropagation(); toggleMonthPopover(); });
+monthFilterInputEl?.addEventListener('change', async () => {
+  const val = monthFilterInputEl.value;
+  if (!val) return;
+  selectedMonth = val;
+  storage.set('selectedMonth', selectedMonth);
+  // Quando Supabase estiver habilitado, refaz a consulta por mês (created_at)
+  try {
+    if (canUseSupabase() && window.TransactionsService?.fetchTransactionsByMonth) {
+      const txs = await window.TransactionsService.fetchTransactionsByMonth(selectedMonth);
+      transactions = Array.isArray(txs) ? txs.map(mapDbTransactionToLocal) : [];
+      storage.set('transactions', transactions);
+    }
+  } catch (err) {
+    console.warn('fetchTransactionsByMonth error:', err);
+  }
+  await ensureMonthlyGoalForSelectedMonth();
+  renderAll();
+});
+document.addEventListener('click', (e) => {
+  if (!monthFilterPopoverEl) return;
+  if (monthFilterPopoverEl.hidden) return;
+  if (!monthFilterPopoverEl.contains(e.target) && e.target !== btnMonthFilterEl) {
+    monthFilterPopoverEl.hidden = true;
+  }
+});
+
+async function ensureMonthlyGoalForSelectedMonth() {
+  const key = selectedMonth;
+  // Se já temos no mapa, nada a fazer
+  if (monthlyGoalsMap[key] != null) {
+    storage.set('monthlyGoals', monthlyGoalsMap);
+    return;
+  }
+  try {
+    if (window.GoalsService?.fetchMonthlyGoalFor) {
+      const found = await window.GoalsService.fetchMonthlyGoalFor(key);
+      if (found && found.target_amount != null) {
+        monthlyGoalsMap[key] = Number(found.target_amount) || 0;
+      } else {
+        // Não existe no banco: criar automaticamente com valor padrão
+        await saveMonthlyGoalForSelectedMonth(DEFAULT_MONTHLY_GOAL);
+      }
+    } else {
+      // Sem serviço: usar valor padrão local
+      monthlyGoalsMap[key] = Number(DEFAULT_MONTHLY_GOAL);
+    }
+  } catch (e) {
+    console.warn('ensureMonthlyGoalForSelectedMonth error:', e);
+    monthlyGoalsMap[key] = Number(DEFAULT_MONTHLY_GOAL);
+  }
+  storage.set('monthlyGoals', monthlyGoalsMap);
+}
+async function saveMonthlyGoalForSelectedMonth(amount) {
+  const key = selectedMonth;
+  monthlyGoalsMap[key] = Number(amount)||0;
+  storage.set('monthlyGoals', monthlyGoalsMap);
+  try {
+    if (window.GoalsService?.saveMonthlyGoalFor) {
+      await window.GoalsService.saveMonthlyGoalFor(key, Number(amount)||0);
+    }
+  } catch (e) { console.warn('saveMonthlyGoalFor supabase error:', e); }
+}
+
+// Submissão de meta mensal
+formMonthlyGoal?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const amount = Number(goalAmountEl?.value || 0);
+  if (!amount) return alert('Informe a meta mensal');
+  try {
+    await saveMonthlyGoalForSelectedMonth(amount);
+  } catch (err) {
+    console.warn('saveMonthlyGoalFor error:', err);
+  }
+  renderAll();
+});
