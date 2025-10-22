@@ -547,41 +547,79 @@ try { txTypeEl?.addEventListener('change', updateBankVisibility); } catch {}
 
 // Renderização de bancos
 function renderBanks() {
-  if (!gridBanksEl) return;
-  gridBanksEl.innerHTML = banks.map(b => `
-    <div class="bank-card">
-      <div class="bank-header">
-        <h3>${b.name}</h3>
-        <button class="action delete" data-id="${b.id}" aria-label="Excluir banco" title="Excluir" type="button">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="3 6 5 6 21 6"></polyline>
-            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
-            <path d="M10 11v6"></path>
-            <path d="M14 11v6"></path>
-            <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
-          </svg>
-        </button>
-      </div>
-    </div>
-  `).join('');
-  gridBanksEl.querySelectorAll('button.delete').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id = btn.dataset.id;
-      const ok = window.confirm('Tem certeza que deseja excluir este banco?');
-      if (!ok) return;
+  const grid = document.getElementById('grid-banks');
+  const banksCountEl = document.getElementById('banks-count');
+  if (!grid) return;
+
+  // Update count badge
+  if (banksCountEl) {
+    banksCountEl.textContent = String(banks.length);
+  }
+
+  grid.innerHTML = '';
+
+  if (!banks || banks.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'Nenhum banco cadastrado ainda';
+    grid.appendChild(empty);
+    return;
+  }
+
+  banks.forEach(b => {
+    const card = document.createElement('div');
+    card.className = 'bank-card';
+
+    const header = document.createElement('div');
+    header.className = 'bank-header';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'bank-name';
+    nameEl.textContent = b.name;
+
+    const actions = document.createElement('div');
+    actions.className = 'bank-actions';
+
+    const btnDelete = document.createElement('button');
+    btnDelete.type = 'button';
+    btnDelete.textContent = 'Excluir';
+    btnDelete.addEventListener('click', async () => {
       try {
-        if (canUseSupabase() && window.BanksService?.deleteBank) {
-          await window.BanksService.deleteBank(id);
+        if (window.env?.supabaseUrl && window.env?.supabaseAnonKey) {
+          await window.BanksService?.deleteBank?.(b.id);
         }
-      } catch (err) { console.warn('deleteBank supabase error:', err); }
-      banks = banks.filter(b => String(b.id) !== String(id));
-      storage.set('banks', banks);
-      renderAll();
+      } catch (e) {
+        console.error('Erro ao excluir banco (remoto):', e);
+      }
+      banks = banks.filter(x => x.id !== b.id);
+      persist('banks', banks);
+      renderBanks();
     });
+
+    actions.appendChild(btnDelete);
+    header.appendChild(nameEl);
+    header.appendChild(actions);
+    card.appendChild(header);
+
+    grid.appendChild(card);
   });
 }
+// Bancos: submit de novo banco
+formBank?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = bankNameEl?.value?.trim();
+  if (!name) return;
+  try {
+    if (window.BanksService?.createBank) {
+      const row = await window.BanksService.createBank({ name });
+      banks = [row, ...banks];
+      storage.set('banks', banks);
+    }
+  } catch (err) { console.warn('createBank error:', err); }
+  if (bankNameEl) bankNameEl.value = '';
+  renderAll();
+});
 
-// Renderização geral
 function renderAll() {
   try {
     renderSummary();
@@ -595,5 +633,3 @@ function renderAll() {
     console.warn('Falha ao renderizar:', err);
   }
 }
-
-// ... existing code ...

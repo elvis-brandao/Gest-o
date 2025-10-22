@@ -451,3 +451,99 @@ input.with-icon { padding-left: 34px; }
 .logout-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; border: none; background: #e7e8ec; color: var(--color-primary); cursor: pointer; flex-shrink: 0; }
 .logout-btn:hover { background: #dfe2e7; }
 .logout-btn svg { width: 18px; height: 18px; }
+
+/* ------- Bancos: cards e header (inspirado no modelo) ------- */
+.bank-card {
+  background: #f8fafc;
+  border: 1px solid var(--muted);
+  border-radius: var(--radius);
+  padding: 12px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color .2s ease;
+}
+.bank-card:hover { border-color: #d1d5db; }
+.bank-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.bank-header h3 { margin: 0; color: var(--color-text); font-weight: 500; }
+.bank-header .action { width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; }
+.bank-header .action.delete { color: #dc2626; }
+.bank-header .action.delete:hover { background: #fee2e2; }
+/* Banks page refinements */
+.banks-card .card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #e7e8ec;
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+
+.grid-banks {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 600px) {
+  .grid-banks {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 900px) {
+  .grid-banks {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+
+.bank-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.bank-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bank-actions button {
+  background: transparent;
+  color: #e11d48;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.bank-actions button:hover {
+  text-decoration: underline;
+}
+.bank-actions button {
+  background: transparent;
+  color: #e11d48;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.bank-actions button:hover {
+  text-decoration: underline;
+}
