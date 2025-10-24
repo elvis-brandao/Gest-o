@@ -519,7 +519,17 @@
             <div class="page-grid">
               <div class="card shadow-sm">
                 <h2 class="card-title">
-                  <svg class="icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10zm2 2v6h14v-6H5zm7-8.5L5.5 9h13L12 3.5z"/></svg>
+                  <span class="icon-bank" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 4l9 4H3l9-4z"></path>
+                      <path d="M4 10h16"></path>
+                      <path d="M5 10v8"></path>
+                      <path d="M9 10v8"></path>
+                      <path d="M13 10v8"></path>
+                      <path d="M17 10v8"></path>
+                      <path d="M3 18h18"></path>
+                    </svg>
+                  </span>
                   Novo Banco
                 </h2>
                 <form id="form-bank" class="form-grid">
@@ -530,10 +540,21 @@
             
               <div class="card shadow-sm banks-card">
                 <h2 class="card-title">
-                  <svg class="icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10zm2 2v6h14v-6H5zm7-8.5L5.5 9h13L12 3.5z"/></svg>
+                  <span class="icon-bank" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 4l9 4H3l9-4z"></path>
+                      <path d="M4 10h16"></path>
+                      <path d="M5 10v8"></path>
+                      <path d="M9 10v8"></path>
+                      <path d="M13 10v8"></path>
+                      <path d="M17 10v8"></path>
+                      <path d="M3 18h18"></path>
+                    </svg>
+                  </span>
                   Bancos
                   <span id="banks-count" class="count-badge" aria-label="Total de bancos"></span>
                 </h2>
+                <div id="banks-feedback" class="feedback" hidden></div>
                 <div id="grid-banks" class="grid-banks"></div>
               </div>
             </div>

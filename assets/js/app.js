@@ -43,6 +43,21 @@ let selectedMonth = storage.get('selectedMonth', getCurrentMonthKey());
 let monthlyGoalsMap = storage.get('monthlyGoals', {});
 const getSelectedMonthlyGoalAmount = () => Number(monthlyGoalsMap[selectedMonth] ?? 0);
 
+// Hidratação central de dados: sincroniza bancos do serviço (Supabase quando disponível)
+async function hydrateAllData() {
+  try {
+    if (window.BanksService?.fetchBanks) {
+      const items = await window.BanksService.fetchBanks();
+      if (Array.isArray(items)) {
+        banks = items.map(b => ({ id: b.id, name: b.name, icon: b.icon ?? null, color: b.color ?? null }));
+        storage.set('banks', banks);
+      }
+    }
+  } catch (e) {
+    console.warn('hydrateAllData(banks) error:', e);
+  }
+}
+
 // Helpers Supabase/Mapeamentos
 function canUseSupabase() {
   try {
@@ -546,6 +561,16 @@ function updateBankVisibility(){
 try { txTypeEl?.addEventListener('change', updateBankVisibility); } catch {}
 
 // Renderização de bancos
+function showBanksFeedback(message, type = 'success') {
+  const el = document.getElementById('banks-feedback');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove('success', 'error');
+  el.classList.add(type);
+  el.hidden = false;
+  setTimeout(() => { el.hidden = true; }, 2500);
+}
+
 function renderBanks() {
   const grid = document.getElementById('grid-banks');
   const banksCountEl = document.getElementById('banks-count');
@@ -577,33 +602,55 @@ function renderBanks() {
     nameEl.className = 'bank-name';
     nameEl.textContent = b.name;
 
-    const actions = document.createElement('div');
-    actions.className = 'bank-actions';
-
     const btnDelete = document.createElement('button');
     btnDelete.type = 'button';
-    btnDelete.textContent = 'Excluir';
+    btnDelete.className = 'bank-delete action delete';
+    btnDelete.setAttribute('aria-label', 'Excluir banco');
+    btnDelete.setAttribute('title', 'Excluir');
+    btnDelete.innerHTML = `
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="3 6 5 6 21 6"></polyline>
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+        <path d="M10 11v6"></path>
+        <path d="M14 11v6"></path>
+        <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
+      </svg>`;
     btnDelete.addEventListener('click', async () => {
+      const bankName = b.name;
+      // Evitar múltiplos cliques
+      btnDelete.disabled = true;
       try {
-        if (window.env?.supabaseUrl && window.env?.supabaseAnonKey) {
-          await window.BanksService?.deleteBank?.(b.id);
-        }
+        // Sempre delegar a exclusão ao serviço (ele decide remoto/offline)
+        await window.BanksService?.deleteBank?.(b.id);
       } catch (e) {
-        console.error('Erro ao excluir banco (remoto):', e);
+        console.error('Erro ao excluir banco:', e);
       }
-      banks = banks.filter(x => x.id !== b.id);
-      persist('banks', banks);
+      // Refazer fetch para espelhar estado do servidor ou cache do serviço
+      let refreshed = null;
+      try {
+        refreshed = await window.BanksService?.fetchBanks?.();
+      } catch {}
+      const refreshedList = Array.isArray(refreshed) ? refreshed : banks.filter(x => x.id !== b.id);
+      const stillExists = refreshedList.some(x => String(x.id) === String(b.id));
+      banks = refreshedList;
+      storage.set('banks', banks);
       renderBanks();
+      if (stillExists) {
+        showBanksFeedback(`Falha ao excluir banco \"${bankName}\"`, 'error');
+      } else {
+        showBanksFeedback(`Banco \"${bankName}\" excluído com sucesso`, 'success');
+      }
+      btnDelete.disabled = false;
     });
 
-    actions.appendChild(btnDelete);
     header.appendChild(nameEl);
-    header.appendChild(actions);
     card.appendChild(header);
+    card.appendChild(btnDelete);
 
     grid.appendChild(card);
   });
 }
+
 // Bancos: submit de novo banco
 formBank?.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -612,12 +659,24 @@ formBank?.addEventListener('submit', async (e) => {
   try {
     if (window.BanksService?.createBank) {
       const row = await window.BanksService.createBank({ name });
+      // Após criar, preferir refetch remoto para garantir consistência
+      try {
+        const refreshed = await window.BanksService?.fetchBanks?.();
+        banks = Array.isArray(refreshed) ? refreshed : [row, ...banks];
+      } catch {
+        banks = [row, ...banks];
+      }
+      storage.set('banks', banks);
+    } else {
+      // modo offline/local
+      const row = { id: Date.now(), name };
       banks = [row, ...banks];
       storage.set('banks', banks);
     }
   } catch (err) { console.warn('createBank error:', err); }
   if (bankNameEl) bankNameEl.value = '';
   renderAll();
+  showBanksFeedback(`Banco "${name}" adicionado com sucesso`, 'success');
 });
 
 function renderAll() {

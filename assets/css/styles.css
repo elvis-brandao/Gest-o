@@ -468,9 +468,24 @@ input.with-icon { padding-left: 34px; }
   justify-content: space-between;
 }
 .bank-header h3 { margin: 0; color: var(--color-text); font-weight: 500; }
+/* Feedback messages */
+.feedback {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+}
+.feedback.success { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+.feedback.error { background: #fef2f2; color: #7f1d1d; border: 1px solid #fecaca; }
+
+/* Overlay delete button positioning */
+.bank-card { position: relative; }
+.bank-delete { position: absolute; top: 50%; transform: translateY(-50%); right: 8px; z-index: 10; color: #dc2626; }
+.bank-delete svg { width: 18px; height: 18px; stroke: #dc2626; }
 .bank-header .action { width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; }
 .bank-header .action.delete { color: #dc2626; }
 .bank-header .action.delete:hover { background: #fee2e2; }
+.bank-header .action.delete svg, .bank-actions .action.delete svg { width: 18px; height: 18px; stroke: #dc2626; }
 /* Banks page refinements */
 .banks-card .card-title {
   display: flex;
