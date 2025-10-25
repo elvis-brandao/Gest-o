@@ -39,7 +39,7 @@ let categories = storage.get('categories', []);
 let monthlyGoal = storage.get('monthlyGoal', { amount: 0 });
 let categoryGoals = storage.get('categoryGoals', []);
 let banks = storage.get('banks', []);
-let selectedMonth = storage.get('selectedMonth', getCurrentMonthKey());
+let selectedMonth = getCurrentMonthKey();
 let monthlyGoalsMap = storage.get('monthlyGoals', {});
 const getSelectedMonthlyGoalAmount = () => Number(monthlyGoalsMap[selectedMonth] ?? 0);
 
@@ -1215,3 +1215,8 @@ function showTransactionsFeedback(message, type = 'success') {
   el.hidden = false;
   setTimeout(() => { el.hidden = true; }, 2500);
 }
+
+// Inicialização da UI de autenticação
+document.addEventListener('DOMContentLoaded', () => {
+  updateAuthUI();
+});

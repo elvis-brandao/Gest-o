@@ -455,9 +455,10 @@ input.with-icon { padding-left: 34px; }
 .user-center .user-name { margin: 0; font-size: 0.95rem; line-height: 1.2; }
 .user-center .user-email { margin: 0; font-size: 0.85rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .user-right { display: flex; align-items: center; }
-.logout-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; border: none; background: #e7e8ec; color: var(--color-primary); cursor: pointer; flex-shrink: 0; }
-.logout-btn:hover { background: #dfe2e7; }
-.logout-btn svg { width: 18px; height: 18px; }
+
+/* Garantir visibilidade do user-info quando não estiver hidden */
+#user-info:not([hidden]) { display: block !important; }
+#user-info[hidden] { display: none !important; }
 
 /* ------- Bancos: cards e header (inspirado no modelo) ------- */
 .bank-card {
@@ -855,11 +856,49 @@ input.with-icon { padding-left: 34px; }
 .user-center .user-name { margin: 0; font-size: 0.95rem; line-height: 1.2; }
 .user-center .user-email { margin: 0; font-size: 0.85rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .user-right { display: flex; align-items: center; }
-.logout-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; border: none; background: #e7e8ec; color: var(--color-primary); cursor: pointer; flex-shrink: 0; }
-.logout-btn:hover { background: #dfe2e7; }
-.logout-btn svg { width: 18px; height: 18px; }
+.logout-btn { 
+  display: inline-flex; 
+  align-items: center; 
+  justify-content: center; 
+  width: 32px; 
+  height: 32px; 
+  border-radius: 8px; 
+  border: none; 
+  background: #e7e8ec; 
+  color: #3b5b70 !important; 
+  cursor: pointer; 
+  flex-shrink: 0; 
+  transition: all 0.15s ease;
+}
+.logout-btn:hover { 
+  background: #dfe2e7; 
+}
+.logout-btn:active { 
+  transform: scale(0.98); 
+}
+.logout-btn svg { 
+  width: 18px; 
+  height: 18px; 
+  display: block; 
+  fill: none !important; 
+  stroke: #3b5b70 !important; 
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.logout-btn svg path, .logout-btn svg rect, .logout-btn svg circle {
+  stroke: #3b5b70 !important;
+  fill: none !important;
+}
+/* Suporte ao uso de imagem SVG externa */
+.logout-btn img {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
 
-/* ------- Bancos: cards e header (inspirado no modelo) ------- */
+ /* ------- Bancos: cards e header (inspirado no modelo) ------- */
 .bank-card {
   background: #f8fafc;
   border: 1px solid var(--muted);
