@@ -628,32 +628,189 @@ function drawIncomeVsExpense() {
   const h = (canvas.height = canvas.clientHeight || 160);
   ctx.clearRect(0, 0, w, h);
 
-  const income = monthlyIncome();
-  const expense = monthlyExpenses();
-  const max = Math.max(income, expense, 1);
-  const barW = Math.min(80, Math.floor(w / 4));
-  const gap = Math.floor(w / 6);
-  const baseY = h - 20;
-  const scale = (h - 40) / max;
-  const incomeH = Math.round(income * scale);
-  const expenseH = Math.round(expense * scale);
+  // Gráfico: Gastos vs Meta para os últimos 6 meses (pares de barras)
+  const months = [];
+  let mk = getCurrentMonthKey();
+  for (let i = 0; i < 6; i++) { months.push(mk); mk = getPrevMonthKey(mk); }
 
-  // Barra de receitas (verde)
-  const incomeX = Math.floor(w / 2 - gap);
-  ctx.fillStyle = '#16a34a';
-  ctx.fillRect(incomeX, baseY - incomeH, barW, incomeH);
+  const expensesForMonth = (monthKey) => {
+    const [yy, mm] = monthKey.split('-').map(Number);
+    return transactions
+      .filter(t => {
+        const d = new Date(t.date);
+        return (d.getFullYear() === yy) && ((d.getMonth()+1) === mm) && t.type === 'expense';
+      })
+      .reduce((s, t) => s + Number(t.amount), 0);
+  };
+  const goalForMonth = (monthKey) => Number(monthlyGoalsMap[monthKey] ?? DEFAULT_MONTHLY_GOAL);
 
-  // Barra de despesas (vermelho)
-  const expenseX = Math.floor(w / 2 + gap - barW);
-  ctx.fillStyle = '#dc2626';
-  ctx.fillRect(expenseX, baseY - expenseH, barW, expenseH);
+  const data = months.map(m => ({ m, expense: expensesForMonth(m), goal: goalForMonth(m) }));
+  const maxVal = Math.max(...data.map(d => Math.max(d.expense, d.goal)), 1);
 
-  // Rótulos
-  ctx.fillStyle = '#0f172a';
-  ctx.font = '12px system-ui, sans-serif';
+  const paddingTop = 20, paddingBottom = 24;
+  const baseY = h - paddingBottom;
+  const scale = (h - paddingTop - paddingBottom) / maxVal;
+
+  // Ajuste de espaçamento: margem externa e espaçamento entre pares
+  const outerPaddingX = 12;
+  const availableW = Math.max(60, w - outerPaddingX * 2);
+  const pairSpacing = Math.floor(availableW / months.length);
+  const barW = Math.max(10, Math.min(28, Math.floor(pairSpacing * 0.35)));
+  const innerGap = Math.max(2, Math.min(6, Math.floor(barW * 0.15)));
+
   ctx.textAlign = 'center';
-  ctx.fillText(`Receitas: ${formatCurrency(income)}`, incomeX + barW / 2, baseY - incomeH - 6);
-  ctx.fillText(`Despesas: ${formatCurrency(expense)}`, expenseX + barW / 2, baseY - expenseH - 6);
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '11px system-ui, sans-serif';
+
+  const rects = [];
+  const pairs = [];
+
+  months.forEach((m, i) => {
+    // xCenter calculado da direita para a esquerda: mês mais recente no extremo direito
+    const xCenter = outerPaddingX + availableW - pairSpacing * (i + 0.5);
+    const { expense, goal } = data[i];
+
+    const goalH = Math.round(goal * scale);
+    const expH = Math.round(expense * scale);
+
+    // Meta (barra esquerda do par)
+    const goalX = xCenter - innerGap - barW;
+    ctx.fillStyle = '#6366f1';
+    ctx.fillRect(goalX, baseY - goalH, barW, goalH);
+    rects.push({ type: 'goal', month: m, value: goal, x: goalX, y: baseY - goalH, w: barW, h: goalH });
+
+    // Gastos (barra direita do par)
+    const expX = xCenter + innerGap;
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(expX, baseY - expH, barW, expH);
+    rects.push({ type: 'expense', month: m, value: expense, x: expX, y: baseY - expH, w: barW, h: expH });
+
+    // Registrar grupo do par
+    const left = Math.min(goalX, expX);
+    const right = Math.max(goalX + barW, expX + barW);
+    const top = Math.min(baseY - goalH, baseY - expH);
+    pairs.push({ month: m, goal, expense, xCenter, left, right, top, baseY });
+
+    // Label do mês
+    const [yy, mm] = m.split('-');
+    ctx.fillStyle = '#0f172a';
+    ctx.fillText(`${mm}/${String(yy).slice(-2)}`, xCenter, h - 6);
+  });
+
+  // Linha de base
+  ctx.strokeStyle = '#e5e7eb';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(outerPaddingX, baseY + 0.5);
+  ctx.lineTo(w - outerPaddingX, baseY + 0.5);
+  ctx.stroke();
+
+  // Tooltips interativos por PAR (hover desktop, click mobile) com orientação e limites
+  canvas._barRects = rects;
+  canvas._pairs = pairs;
+  if (!canvas._tooltipBound) {
+    canvas._tooltipBound = true;
+
+    const ensureTip = () => {
+      let tip = document.getElementById('chart-tooltip');
+      if (!tip) {
+        tip = document.createElement('div');
+        tip.id = 'chart-tooltip';
+        tip.className = 'tooltip';
+        tip.style.position = 'fixed';
+        document.body.appendChild(tip);
+      }
+      return tip;
+    };
+    const tip = ensureTip();
+    const hideTip = () => tip.classList.remove('open');
+
+    const findHit = (ev) => {
+      const cRect = canvas.getBoundingClientRect();
+      const cx = ev.clientX - cRect.left;
+      const cy = ev.clientY - cRect.top;
+      // primeiro tenta achar uma barra
+      for (let i = 0; i < canvas._barRects.length; i++) {
+        const r = canvas._barRects[i];
+        if (cx >= r.x && cx <= r.x + r.w && cy >= r.y && cy <= r.y + r.h) {
+          const pIndex = canvas._pairs.findIndex(p => p.month === r.month);
+          return { index: pIndex, pair: canvas._pairs[pIndex], cRect };
+        }
+      }
+      // se não achou, tenta região do par
+      for (let i = 0; i < canvas._pairs.length; i++) {
+        const p = canvas._pairs[i];
+        if (cx >= p.left && cx <= p.right && cy >= p.top && cy <= p.baseY) {
+          return { index: i, pair: p, cRect };
+        }
+      }
+      return { index: -1, pair: null, cRect };
+    };
+
+    const showTipForPair = (pair, cRect) => {
+      const absLeft = cRect.left + pair.left;
+      const absRight = cRect.left + pair.right;
+      const absTop = cRect.top + pair.top;
+      const viewportCenter = window.innerWidth / 2;
+      const absCenter = cRect.left + pair.xCenter;
+      const orientation = absCenter < viewportCenter ? 'ltr' : 'rtl';
+
+      const percent = pair.goal > 0 ? (pair.expense / pair.goal) * 100 : null;
+      tip.innerHTML = `Meta: ${formatCurrency(pair.goal)}<br>Gasto: ${formatCurrency(pair.expense)}${percent !== null ? ` (${percent.toFixed(1)}%)` : ''}`;
+
+      // Primeiro define lado e largura máxima para não ultrapassar a tela
+      if (orientation === 'rtl') {
+        const rightPx = Math.max(8, window.innerWidth - absRight + 8);
+        tip.style.right = rightPx + 'px';
+        tip.style.left = 'auto';
+        const availableLeft = absRight - 8;
+        tip.style.maxWidth = Math.max(140, Math.min(360, availableLeft)) + 'px';
+      } else {
+        const leftPx = Math.max(8, absLeft - 8);
+        tip.style.left = leftPx + 'px';
+        tip.style.right = 'auto';
+        const availableRight = window.innerWidth - absLeft - 8;
+        tip.style.maxWidth = Math.max(140, Math.min(360, availableRight)) + 'px';
+      }
+
+      // Torna visível para medir altura e ajustar top
+      tip.classList.add('open');
+      const tipH = tip.offsetHeight || 28;
+      const topPx = Math.max(8, absTop - tipH - 8);
+      tip.style.top = topPx + 'px';
+    };
+
+    const hasHover = window.matchMedia && window.matchMedia('(hover: hover)').matches;
+    if (hasHover) {
+      canvas.addEventListener('mousemove', (ev) => {
+        const { index, pair, cRect } = findHit(ev);
+        if (index >= 0) {
+          showTipForPair(pair, cRect);
+        } else {
+          hideTip();
+        }
+      });
+      canvas.addEventListener('mouseleave', hideTip);
+    }
+
+    const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    if (isTouch) {
+      canvas.addEventListener('click', (ev) => {
+        const { index, pair, cRect } = findHit(ev);
+        if (index >= 0) {
+          showTipForPair(pair, cRect);
+        } else {
+          hideTip();
+        }
+      });
+      // Fecha ao tocar fora
+      document.addEventListener('click', (ev) => {
+        const cRect = canvas.getBoundingClientRect();
+        const insideCanvas = ev.clientX >= cRect.left && ev.clientX <= cRect.right && ev.clientY >= cRect.top && ev.clientY <= cRect.bottom;
+        if (!insideCanvas) hideTip();
+      });
+    }
+  }
 }
 
 function drawPieFromMap(canvasId, map, colorGetter) {

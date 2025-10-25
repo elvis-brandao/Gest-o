@@ -718,6 +718,43 @@ input.with-icon { padding-left: 34px; }
   .color-preview { width: 40px; height: 40px; }
 }
 
+/* Padronização de tamanhos dos gráficos */
+/* Mobile default: 250x250 */
+canvas#pie-expenses-by-category,
+canvas#pie-expenses-by-bank {
+  width: 250px !important;
+  height: 250px !important;
+  max-width: 250px !important;
+  max-height: 250px !important;
+}
+/* Terceiro gráfico: ocupar largura máxima disponível */
+canvas#bar-income-vs-expense {
+  width: 100% !important;
+  max-width: none !important;
+  height: 250px !important;
+  margin-bottom: 90px !important;
+}
+/* Centraliza o canvas dentro dos contêineres */
+.chart-square, .chart-wide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Desktop: 300x300 para pizzas; barra mantém largura máxima e altura 300 */
+@media (min-width: 900px) {
+  canvas#pie-expenses-by-category,
+  canvas#pie-expenses-by-bank {
+    width: 300px !important;
+    height: 300px !important;
+    max-width: 300px !important;
+    max-height: 300px !important;
+  }
+  canvas#bar-income-vs-expense {
+    height: 300px !important;
+    margin-bottom: 0 !important;
+  }
+}
+
 /* Z-index hierarchy fixes */
 #month-filter-popover { z-index: 2000 !important; }
 #btn-open-color { position: relative; z-index: 1; }
