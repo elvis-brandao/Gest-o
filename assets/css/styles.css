@@ -205,6 +205,8 @@ button:hover { background-color: #2f4a5a; }
 @media (min-width: 900px) {
   .dashboard-grid-charts { grid-template-columns: 1fr 1fr; }
   .dashboard-grid-charts .card { margin-bottom: 0; }
+  /* Card especial para Gastos vs Meta: ocupa largura total no desktop */
+  .dashboard-grid-charts .chart-card-income-expense { grid-column: 1 / -1; width: 100%; }
 }
 
 /* Container quadrado para o gráfico de pizza (desktop) */

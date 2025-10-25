@@ -718,6 +718,8 @@ function drawIncomeVsExpense() {
         tip.id = 'chart-tooltip';
         tip.className = 'tooltip';
         tip.style.position = 'fixed';
+        tip.style.pointerEvents = 'none'; // não bloquear toques no mobile
+        tip.style.zIndex = '1000';
         document.body.appendChild(tip);
       }
       return tip;
@@ -727,8 +729,20 @@ function drawIncomeVsExpense() {
 
     const findHit = (ev) => {
       const cRect = canvas.getBoundingClientRect();
-      const cx = ev.clientX - cRect.left;
-      const cy = ev.clientY - cRect.top;
+      // Normaliza coordenadas para mouse, touch e pointer
+      const norm = (() => {
+        if (ev && ev.touches && ev.touches.length) {
+          return { x: ev.touches[0].clientX, y: ev.touches[0].clientY };
+        }
+        if (ev && ev.changedTouches && ev.changedTouches.length) {
+          return { x: ev.changedTouches[0].clientX, y: ev.changedTouches[0].clientY };
+        }
+        const x = (typeof ev.clientX === 'number') ? ev.clientX : (typeof ev.pageX === 'number' ? ev.pageX - window.scrollX : 0);
+        const y = (typeof ev.clientY === 'number') ? ev.clientY : (typeof ev.pageY === 'number' ? ev.pageY - window.scrollY : 0);
+        return { x, y };
+      })();
+      const cx = norm.x - cRect.left;
+      const cy = norm.y - cRect.top;
       // primeiro tenta achar uma barra
       for (let i = 0; i < canvas._barRects.length; i++) {
         const r = canvas._barRects[i];
@@ -795,25 +809,38 @@ function drawIncomeVsExpense() {
 
     const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     if (isTouch) {
-      canvas.addEventListener('click', (ev) => {
+      const handleTap = (ev) => {
         const { index, pair, cRect } = findHit(ev);
         if (index >= 0) {
           showTipForPair(pair, cRect);
         } else {
           hideTip();
         }
-      });
+      };
+      // Suporte amplo: 'touchstart' e 'click'
+      canvas.addEventListener('touchstart', handleTap, { passive: true });
+      canvas.addEventListener('click', handleTap);
       // Fecha ao tocar fora
-      document.addEventListener('click', (ev) => {
+      const closeOnOutside = (ev) => {
         const cRect = canvas.getBoundingClientRect();
-        const insideCanvas = ev.clientX >= cRect.left && ev.clientX <= cRect.right && ev.clientY >= cRect.top && ev.clientY <= cRect.bottom;
+        const getXY = () => {
+          if (ev && ev.touches && ev.touches.length) return { x: ev.touches[0].clientX, y: ev.touches[0].clientY };
+          if (ev && ev.changedTouches && ev.changedTouches.length) return { x: ev.changedTouches[0].clientX, y: ev.changedTouches[0].clientY };
+          const x = (typeof ev.clientX === 'number') ? ev.clientX : (typeof ev.pageX === 'number' ? ev.pageX - window.scrollX : 0);
+          const y = (typeof ev.clientY === 'number') ? ev.clientY : (typeof ev.pageY === 'number' ? ev.pageY - window.scrollY : 0);
+          return { x, y };
+        };
+        const { x, y } = getXY();
+        const insideCanvas = x >= cRect.left && x <= cRect.right && y >= cRect.top && y <= cRect.bottom;
         if (!insideCanvas) hideTip();
-      });
+      };
+      document.addEventListener('touchstart', closeOnOutside, { passive: true });
+      document.addEventListener('click', closeOnOutside);
     }
   }
 }
 
-function drawPieFromMap(canvasId, map, colorGetter) {
+function drawPieFromMap(canvasId, map, colorGetter, labelGetter = (key) => String(key)) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -830,10 +857,13 @@ function drawPieFromMap(canvasId, map, colorGetter) {
     ctx.fillText('Sem dados', w / 2, h / 2);
     return;
   }
-  let start = -Math.PI / 2;
+
   const cx = w / 2, cy = h / 2, r = Math.min(w, h) / 2 - 10;
+  const slices = [];
+  let start = -Math.PI / 2;
   entries.forEach(([key, val], idx) => {
-    const frac = Number(val) / total;
+    const value = Number(val);
+    const frac = value / total;
     const end = start + frac * 2 * Math.PI;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
@@ -842,8 +872,122 @@ function drawPieFromMap(canvasId, map, colorGetter) {
     const color = colorGetter(key, idx);
     ctx.fillStyle = color;
     ctx.fill();
+    slices.push({ key, label: labelGetter(key), value, start, end, frac });
     start = end;
   });
+
+  // Interação: hover (desktop) e toque/click (mobile)
+  const ensureTip = () => {
+    let tip = document.getElementById('chart-tooltip');
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.id = 'chart-tooltip';
+      tip.className = 'tooltip';
+      tip.style.position = 'fixed';
+      tip.style.pointerEvents = 'none';
+      tip.style.zIndex = '1000';
+      document.body.appendChild(tip);
+    }
+    return tip;
+  };
+  const tip = ensureTip();
+  const hideTip = () => tip.classList.remove('open');
+
+  const findSlice = (ev) => {
+    const cRect = canvas.getBoundingClientRect();
+    const getXY = () => {
+      if (ev && ev.touches && ev.touches.length) return { x: ev.touches[0].clientX, y: ev.touches[0].clientY };
+      if (ev && ev.changedTouches && ev.changedTouches.length) return { x: ev.changedTouches[0].clientX, y: ev.changedTouches[0].clientY };
+      const x = (typeof ev.clientX === 'number') ? ev.clientX : (typeof ev.pageX === 'number' ? ev.pageX - window.scrollX : 0);
+      const y = (typeof ev.clientY === 'number') ? ev.clientY : (typeof ev.pageY === 'number' ? ev.pageY - window.scrollY : 0);
+      return { x, y };
+    };
+    const { x, y } = getXY();
+    const lx = x - cRect.left;
+    const ly = y - cRect.top;
+    const dx = lx - cx;
+    const dy = ly - cy;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist > r || dist < 0) return { index: -1, slice: null, cRect };
+    let ang = Math.atan2(dy, dx); // [-PI, PI]
+    // normaliza para nosso sistema (com início em -PI/2)
+    // Não precisa converter; basta comparar com start/end diretamente
+    for (let i = 0; i < slices.length; i++) {
+      const s = slices[i];
+      // trata wrap de ângulo
+      if (ang >= s.start && ang <= s.end) return { index: i, slice: s, cRect };
+    }
+    return { index: -1, slice: null, cRect };
+  };
+
+  const showTipForSlice = (slice, cRect) => {
+    const mid = (slice.start + slice.end) / 2;
+    const px = cRect.left + cx + Math.cos(mid) * (r * 0.7);
+    const py = cRect.top + cy + Math.sin(mid) * (r * 0.7);
+    const orientation = (px < (window.innerWidth / 2)) ? 'ltr' : 'rtl';
+
+    const pct = (slice.value / total) * 100;
+    tip.innerHTML = `${slice.label}: ${formatCurrency(slice.value)} (${pct.toFixed(1)}%)`;
+
+    tip.classList.add('open');
+    const tipW = tip.offsetWidth || 160;
+    const tipH = tip.offsetHeight || 28;
+    const leftPad = 8, rightPad = 8, topPad = 8;
+
+    if (orientation === 'rtl') {
+      const rightPx = Math.max(rightPad, window.innerWidth - px + rightPad);
+      tip.style.right = rightPx + 'px';
+      tip.style.left = 'auto';
+      const availableLeft = px - rightPad;
+      tip.style.maxWidth = Math.max(140, Math.min(360, availableLeft)) + 'px';
+    } else {
+      const leftPx = Math.max(leftPad, px - leftPad);
+      tip.style.left = leftPx + 'px';
+      tip.style.right = 'auto';
+      const availableRight = window.innerWidth - px - rightPad;
+      tip.style.maxWidth = Math.max(140, Math.min(360, availableRight)) + 'px';
+    }
+    const topPx = Math.max(topPad, py - tipH - 10);
+    tip.style.top = topPx + 'px';
+  };
+
+  // Bind handlers por canvas
+  const hasHover = window.matchMedia && window.matchMedia('(hover: hover)').matches;
+  if (hasHover) {
+    canvas.addEventListener('mousemove', (ev) => {
+      const { index, slice, cRect } = findSlice(ev);
+      if (index >= 0) {
+        showTipForSlice(slice, cRect);
+      } else {
+        hideTip();
+      }
+    });
+    canvas.addEventListener('mouseleave', hideTip);
+  }
+  const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+  if (isTouch) {
+    const handleTap = (ev) => {
+      const { index, slice, cRect } = findSlice(ev);
+      if (index >= 0) showTipForSlice(slice, cRect); else hideTip();
+    };
+    canvas.addEventListener('touchstart', handleTap, { passive: true });
+    canvas.addEventListener('click', handleTap);
+    const closeOnOutside = (ev) => {
+      const cRect = canvas.getBoundingClientRect();
+      const getXY = () => {
+        if (ev && ev.touches && ev.touches.length) return { x: ev.touches[0].clientX, y: ev.touches[0].clientY };
+        if (ev && ev.changedTouches && ev.changedTouches.length) return { x: ev.changedTouches[0].clientX, y: ev.changedTouches[0].clientY };
+        const x = (typeof ev.clientX === 'number') ? ev.clientX : (typeof ev.pageX === 'number' ? ev.pageX - window.scrollX : 0);
+        const y = (typeof ev.clientY === 'number') ? ev.clientY : (typeof ev.pageY === 'number' ? ev.pageY - window.scrollY : 0);
+        return { x, y };
+      };
+      const { x, y } = getXY();
+      const inside = x >= cRect.left && x <= cRect.right && y >= cRect.top && y <= cRect.bottom;
+      if (!inside) hideTip();
+    };
+    document.addEventListener('touchstart', closeOnOutside, { passive: true });
+    document.addEventListener('click', closeOnOutside);
+  }
 }
 
 function drawPieExpensesByCategory() {
@@ -853,7 +997,11 @@ function drawPieExpensesByCategory() {
     const base = cat?.color || ['#3b82f6','#f59e0b','#10b981','#ef4444','#6366f1','#14b8a6','#f43f5e','#84cc16'][idx % 8];
     return hexToRgba(base, 0.8);
   };
-  drawPieFromMap('pie-expenses-by-category', map, colorGetter);
+  const labelGetter = (key) => {
+    const cat = categories.find(c => String(c.id) === String(key));
+    return cat?.name || 'Sem categoria';
+  };
+  drawPieFromMap('pie-expenses-by-category', map, colorGetter, labelGetter);
 }
 
 function drawPieExpensesByBank() {
@@ -862,7 +1010,11 @@ function drawPieExpensesByBank() {
     const palette = ['#0ea5e9','#f97316','#22c55e','#eab308','#a855f7','#06b6d4','#ef4444','#84cc16'];
     return hexToRgba(palette[idx % palette.length], 0.8);
   };
-  drawPieFromMap('pie-expenses-by-bank', map, colorGetter);
+  const labelGetter = (key) => {
+    const bank = banks.find(b => String(b.id) === String(key));
+    return bank?.name || 'Banco';
+  };
+  drawPieFromMap('pie-expenses-by-bank', map, colorGetter, labelGetter);
 }
 
 // Navegação
