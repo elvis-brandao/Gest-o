@@ -142,7 +142,7 @@ button:hover { background-color: #2f4a5a; }
 
 .grid-categories { display: grid; grid-template-columns: 1fr; gap: 16px; }
 .category-card { border-left: 4px solid transparent; background: var(--color-surface); border-radius: 14px; padding: 12px; box-shadow: var(--shadow-sm); }
-.category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.category-header { display: flex; justify-content: flex-start; align-items: center; margin-bottom: 8px; }
 .category-color { width: 24px; height: 24px; border-radius: 999px; }
 
 .grid-category-goals { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
@@ -673,11 +673,15 @@ input.with-icon { padding-left: 34px; }
 }
 .btn-link.small { font-size: 0.85rem; display: block; text-align: center; margin-top: 8px; }
 
-/* Popup header + center button styling */
+/* Popup header + full-width button styling */
 .color-popup .popup-title { margin: 0 0 8px; font-size: 1rem; color: var(--color-text); }
-.color-popup .btn { display: block; margin: 8px auto 0; }
-#btn-color-apply { transition: filter .15s ease; }
+.color-popup .btn { display: block; width: 100%; margin-top: 8px; }
+#btn-color-apply { border-width: 3px; border-style: solid; transition: border-color .2s ease, filter .15s ease; }
 #btn-color-apply:hover { filter: brightness(0.95); }
+
+/* Categorias: botão Adicionar em largura total do formulário */
+#page-categories .form-grid.small .form-actions { grid-column: 1 / -1; align-self: stretch; }
+#page-categories .form-grid.small .form-actions .btn { width: 100%; display: block; }
 
 /* ------- Ajustes mobile específicos para tela de login ------- */
 /* Empilhar campos e evitar overflow no mobile */

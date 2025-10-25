@@ -198,23 +198,29 @@ try {
   const applyBtnEl = document.getElementById('btn-color-apply');
   const overlayEl = document.getElementById('color-overlay');
   const announceEl = document.getElementById('color-announce');
-  const recentContainerEl = document.querySelector('.recent-options');
+  const colorsContainerEl = popupEl.querySelector('.color-options');
   let tempColor = null;
+  const DEFAULT_COLORS = ['#6200ee','#ff6b6b','#ffd166','#06d6a0','#118ab2','#8338ec','#ff9f1c','#2ec4b6','#e0e0e0','#3a86ff','#8d99ae','#ef476f'];
   const getRecentColors = () => {
-    try { return JSON.parse(localStorage.getItem('recentCategoryColors')||'[]'); } catch { return []; }
+    try {
+      const arr = JSON.parse(localStorage.getItem('recentCategoryColors')||'[]');
+      return Array.isArray(arr) && arr.length ? arr.slice(0,12) : DEFAULT_COLORS.slice(0,12);
+    } catch { return DEFAULT_COLORS.slice(0,12); }
   };
-  const setRecentColors = (arr) => localStorage.setItem('recentCategoryColors', JSON.stringify(arr));
+  const setRecentColors = (arr) => localStorage.setItem('recentCategoryColors', JSON.stringify(arr.slice(0,12)));
   const pushRecentColor = (color) => {
     if (!color) return;
     let arr = getRecentColors();
-    arr = [color, ...arr.filter(c => c !== color)].slice(0, 8);
+    // FIFO: adiciona a nova cor no início e, se exceder 12, remove a mais antiga (final)
+    arr = [color, ...arr];
+    if (arr.length > 12) arr = arr.slice(0, 12);
     setRecentColors(arr);
     renderRecentColors();
   };
   const renderRecentColors = () => {
-    if (!recentContainerEl) return;
+    if (!colorsContainerEl) return;
     const arr = getRecentColors();
-    recentContainerEl.innerHTML = '';
+    colorsContainerEl.innerHTML = '';
     arr.forEach((color) => {
       const btn = document.createElement('button');
       btn.className = 'color-swatch';
@@ -222,27 +228,25 @@ try {
       btn.style.backgroundColor = color;
       btn.addEventListener('click', () => {
         tempColor = color;
-        popupEl.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('selected'));
+        colorsContainerEl.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('selected'));
         btn.classList.add('selected');
         updateApplyPreview(tempColor);
         if (catColorEl) catColorEl.value = tempColor; // refletir em tempo real
         if (announceEl) announceEl.textContent = `Cor selecionada ${color}`;
       });
-      recentContainerEl.appendChild(btn);
+      colorsContainerEl.appendChild(btn);
     });
   };
-  const getTextColorForBg = (bg) => {
-    try {
-      const c = bg.replace('#','');
-      const r = parseInt(c.substring(0,2),16), g = parseInt(c.substring(2,4),16), b = parseInt(c.substring(4,6),16);
-      const luminance = (0.299*r + 0.587*g + 0.114*b);
-      return luminance > 186 ? '#111' : '#fff';
-    } catch { return '#fff'; }
-  };
   const updateApplyPreview = (color) => {
-    if (!applyBtnEl || !color) return;
-    applyBtnEl.style.backgroundColor = color;
-    applyBtnEl.style.color = getTextColorForBg(color);
+    if (!applyBtnEl) return;
+    // Não alterar o fundo do botão (conforme requisito)
+    applyBtnEl.style.backgroundColor = '';
+    // Borda sólida de no mínimo 3px e cor igual ao input em tempo real
+    applyBtnEl.style.borderStyle = 'solid';
+    applyBtnEl.style.borderWidth = '3px';
+    if (color) {
+      applyBtnEl.style.borderColor = color;
+    }
   };
   // Restaura última cor
   const lastColor = localStorage.getItem('lastCategoryColor');
@@ -302,6 +306,7 @@ try {
   // Fechar ao clicar fora
   overlayEl?.addEventListener('click', () => closePopup());
   // Seleção via swatches da paleta fixa
+  // Substituída por lista dinâmica de 12 cores de histórico criada em renderRecentColors()
   popupEl?.querySelectorAll('.color-options .color-swatch')?.forEach((btn) => {
     btn.addEventListener('click', () => {
       const color = btn.getAttribute('data-color');
