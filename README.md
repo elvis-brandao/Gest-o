@@ -88,6 +88,56 @@ D:\Gestão
 - Drawer e overlay de navegação otimizados para toque.
 - Serviços possuem modo offline-first com sincronização quando a rede volta.
 
+## Deploy (Cloudflare Pages)
+- Build command: `node scripts/generate_env_local.js`
+- Output directory: `build`
+- Framework preset: None
+- Variáveis de ambiente (Preview e Production):
+  - `USE_SUPABASE=true` (ou `1`)
+  - `SUPABASE_URL=https://xxxxx.supabase.co`
+  - `SUPABASE_ANON_KEY=eyJhbGciOi...`
+- Ordem de carregamento em `index.html`:
+  - `assets/js/env.local.js` antes de `assets/js/env.js`.
+  - `ENV_USE_DOTENV=false` para evitar `fetch('/.env')` em produção.
+- Como funciona:
+  - O build copia o site para `build/` e gera `assets/js/env.local.js` com `window.__ENV` a partir das variáveis do Cloudflare Pages.
+  - Em runtime, `env.js` mescla os valores e o `supabaseClient` lê de `window.__ENV`.
+- Desenvolvimento local:
+  - `assets/js/env.local.js` não existe por padrão; o 404 é esperado e o app usa defaults (modo offline/localStorage).
+  - Opcional: crie `assets/js/env.local.js` a partir de `assets/js/env.local.example.js` para evitar o 404.
+- Pós-deploy:
+  - Verifique `window.__ENV` no console do navegador.
+  - Hash routing funciona sem regras adicionais.
+  - Service Worker registra fora de `localhost`; se notar cache antigo, teste em aba anônima ou limpe cache.
+
+## Exemplo Cloudflare Pages
+- Conecte o repositório no Pages e escolha preset `None`.
+- Build command: `node scripts/generate_env_local.js`.
+- Output directory: `build`.
+- Variáveis (defina em Preview e Production):
+  - `USE_SUPABASE=true` (ou `1`)
+  - `SUPABASE_URL=https://seuprojeto.supabase.co`
+  - `SUPABASE_ANON_KEY=eyJhbGciOi...`
+- Confirme em `index.html`:
+  - `<script src="assets/js/env.local.js"></script>` antes de `<script src="assets/js/env.js"></script>`
+  - `<meta name="ENV_USE_DOTENV" content="false">`
+- Após o build, verifique no console: `window.__ENV`.
+- Exemplo gerado de `assets/js/env.local.js`:
+  - `window.__ENV = { USE_SUPABASE: true, SUPABASE_URL: "https://seuprojeto.supabase.co", SUPABASE_ANON_KEY: "eyJhbGciOi..." };`
+
+### Troubleshooting
+- `env.local.js` ausente no publish:
+  - Confira os logs do build e se as variáveis foram definidas.
+  - Verifique se o `Output directory` está como `build`.
+- Cache do Service Worker:
+  - Teste em aba anônima ou limpe cache ao atualizar.
+- CORS/Supabase:
+  - Use a anon key correta; a API do Supabase aceita chamadas públicas com a anon key.
+
+### CLI (Opcional)
+- Se preferir via CLI: `npx wrangler pages publish build --project-name seu-projeto`.
+- Garanta que as variáveis estão definidas no projeto do Pages.
+
 ## Próximos Passos Sugeridos
 - Documentar convenções de código e CSS, e fluxo de contribuição.
 - Adicionar testes de fumaça para renderizações críticas.

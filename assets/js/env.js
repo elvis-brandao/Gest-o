@@ -4,7 +4,10 @@
   function readMeta(name){
     try {
       var el = document.querySelector('meta[name="'+name+'"]');
-      return el ? el.getAttribute('content') : undefined;
+      var val = el ? el.getAttribute('content') : undefined;
+      if (val == null) return undefined;
+      val = String(val).trim();
+      return val.length ? val : undefined; // evita sobrescrever com vazio
     } catch(e) { return undefined; }
   }
   function asBool(val){
@@ -66,8 +69,8 @@
   // Se já existir window.__ENV (carregado por snippet ou outro), mescla
   var existing = (typeof window !== 'undefined' && window.__ENV) ? window.__ENV : {};
 
-  // Merge inicial (prioridade: process.env > meta tags > existentes > defaults)
-  var merged = Object.assign({}, defaults, existing, fromMeta, fromProcess);
+  // Merge inicial (prioridade: process.env > existentes > meta tags > defaults)
+  var merged = Object.assign({}, defaults, fromMeta, existing, fromProcess);
   window.__ENV = merged;
 
   // Opcional: leitura de .env no localhost, controlada por flag
