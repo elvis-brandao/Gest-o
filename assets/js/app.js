@@ -132,6 +132,19 @@ const expensesByCat = () => {
   });
   return map;
 };
+// Utilidades de data em formato BR
+function formatDateBRFromISO(iso) {
+  const d = iso ? new Date(iso) : new Date();
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+function parseDateBRToISO(str) {
+  const m = /^([0-9]{2})\/([0-9]{2})\/([0-9]{4})$/.exec(String(str || '').trim());
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+}
+function todayBR() { return formatDateBRFromISO(); }
 // Agregação: despesas por banco
 const expensesByBank = () => {
   const map = {};
@@ -181,10 +194,16 @@ const txDescriptionEl = document.getElementById('tx-description');
 const txAmountEl = document.getElementById('tx-amount');
 const txDateEl = document.getElementById('tx-date');
 const txTypeEl = document.getElementById('tx-type');
+// Preencher data padrão imediatamente (robusto independente de renderTransactions)
+try { if (txDateEl && !txDateEl.value) { txDateEl.value = todayISO(); } } catch {}
 const txCategoryEl = document.getElementById('tx-category');
 const txBankEl = document.getElementById('tx-bank');
 const txBankGroupEl = document.getElementById('tx-bank-group');
-const tableTransactionsTbody = document.getElementById('table-transactions');
+const listTransactionsEl = document.getElementById('list-transactions');
+// Elementos do dropdown pesquisável de categorias
+const catPickerEl = document.getElementById('tx-category-picker');
+const catFilterEl = document.getElementById('tx-category-filter');
+const catListEl = document.getElementById('tx-category-list');
 const formCat = document.getElementById('form-category');
 const catNameEl = document.getElementById('cat-name');
 const catColorEl = document.getElementById('cat-color');
@@ -623,7 +642,8 @@ function showPage(route, opts = {}) {
   const menuBtn = document.getElementById('btn-menu');
   if (menuBtn) menuBtn.hidden = (route === 'auth');
   const root = document.body;
-  if (route === 'auth') { root.classList.add('auth-mode'); try { closeDrawer(); } catch {} } else { root.classList.remove('auth-mode'); }
+  try { closeDrawer(); } catch {}
+  if (route === 'auth') { root.classList.add('auth-mode'); } else { root.classList.remove('auth-mode'); }
   updateAuthUI();
   renderAll();
 }
@@ -687,36 +707,60 @@ function renderSummary() {
 }
 
 function renderTransactions() {
-  // Prepara select de categorias
+  // Prepara selects
   if (txCategoryEl) {
     txCategoryEl.innerHTML = categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
     if (!txCategoryEl.value) txCategoryEl.value = categories[0]?.id || '';
   }
-  // Prepara select de bancos
   if (txBankEl) {
     txBankEl.innerHTML = `<option value="">Dinheiro</option>` + banks.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
   }
   if (txDateEl && !txDateEl.value) txDateEl.value = todayISO();
-  // Ajusta visibilidade do banco conforme tipo
   updateBankVisibility();
-  // Lista transações do mês
-  const rows = currentMonthTransactions().map(t => {
+
+  // Cards de transações do mês
+  const cards = currentMonthTransactions().map(t => {
     const cat = categories.find(c => String(c.id) === String(t.categoryId));
     const bank = banks.find(b => String(b.id) === String(t.bankId));
     const isIncome = t.type === 'income';
-    return `<tr>
-      <td>${new Date(t.date).toLocaleDateString('pt-BR')}</td>
-      <td>${t.description}</td>
-      <td><span class="badge" style="background:${cat?.color||'#999'}">${cat?.name||'Sem categoria'}</span></td>
-      <td>${!isIncome ? `<span class=\"badge\">${bank?.name||'Dinheiro'}</span>` : '-'}</td>
-      <td><span style="color:${isIncome?'#2e7d32':'#c62828'}">${isIncome?'+':'-'} ${formatCurrency(t.amount)}</span></td>
-      <td><button class="delete" data-id="${t.id}" type="button">Excluir</button></td>
-    </tr>`;
+    const icon = isIncome
+      ? `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"></path></svg>`
+      : `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7l-6 6-4-4-8 8"></path></svg>`;
+    const bankLabel = bank?.name ? bank.name : (!isIncome ? 'Dinheiro' : '');
+    const meta = [
+      new Date(t.date).toLocaleDateString('pt-BR'),
+      cat?.name || 'Sem categoria',
+      bankLabel
+    ].filter(Boolean).map(x => `<span>${x}</span>`).join('');
+    const amountHtml = `<span class="tx-amount ${isIncome?'income':'expense'}">${isIncome?'+':'-'} ${formatCurrency(t.amount)}</span>`;
+    return `
+      <div class="tx-card">
+        <div class="tx-left">
+          <div class="tx-icon ${isIncome?'income':'expense'}">${icon}</div>
+          <div class="tx-info">
+            <p class="tx-title">${t.description}</p>
+            <div class="tx-meta">${meta}</div>
+          </div>
+        </div>
+        <div class="tx-right">
+          ${amountHtml}
+          <button class="tx-delete action delete" data-id="${t.id}" type="button" aria-label="Excluir">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+              <path d="M10 11v6"></path>
+              <path d="M14 11v6"></path>
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+            </svg>
+          </button>
+        </div>
+      </div>`;
   }).join('');
-  if (tableTransactionsTbody) {
-    tableTransactionsTbody.innerHTML = rows || `<tr><td colspan="6" style="text-align:center">Nenhuma transação registrada neste mês</td></tr>`;
+
+  if (listTransactionsEl) {
+    listTransactionsEl.innerHTML = cards || `<div class="muted" style="text-align:center">Nenhuma transação registrada neste mês</div>`;
     // Ações de excluir
-    tableTransactionsTbody.querySelectorAll('button.delete').forEach(btn => {
+    listTransactionsEl.querySelectorAll('.tx-delete').forEach(btn => {
       btn.addEventListener('click', async () => {
         const id = btn.dataset.id;
         const ok = window.confirm('Tem certeza que deseja excluir esta transação?');
@@ -734,6 +778,7 @@ function renderTransactions() {
     });
   }
 }
+
 
 function renderCategories() {
   const grid = document.getElementById('grid-categories');
@@ -1013,3 +1058,152 @@ try {
     try { renderAll(); } catch {}
   });
 } catch {}
+
+// Renderização de transações
+function renderTransactions(transactions = []) {
+  // Prepara selects
+  if (txCategoryEl) {
+    txCategoryEl.innerHTML = categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    if (!txCategoryEl.value) txCategoryEl.value = categories[0]?.id || '';
+  }
+  if (txBankEl) {
+    txBankEl.innerHTML = `<option value="">Dinheiro</option>` + banks.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+  }
+  if (txDateEl && !txDateEl.value) txDateEl.value = todayISO();
+  updateBankVisibility();
+  const listEl = document.getElementById('list-transactions');
+  if (!listEl) return;
+
+  // Usa a lista passada; se vazia, cai para transações do mês atual
+  const list = (Array.isArray(transactions) && transactions.length)
+    ? transactions
+    : (typeof currentMonthTransactions === 'function' ? currentMonthTransactions() : []);
+
+  const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (m) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  }[m]));
+
+  listEl.innerHTML = (list || []).map((tx) => {
+    const isIncome = tx.type === 'income';
+    const iconClass = isIncome ? 'income' : 'expense';
+    const amountSign = isIncome ? '+' : '-';
+    const amountClass = isIncome ? 'income' : 'expense';
+
+    const categoryName = tx.categoryName || (window.Categories?.findCategoryName?.(tx.categoryId)) || (Array.isArray(categories) ? (categories.find(c => String(c.id)===String(tx.categoryId))?.name) : '') || 'Sem categoria';
+    const bankName = tx.bankName || tx.bank || (window.Banks?.findBankName?.(tx.bankId)) || (Array.isArray(banks) ? (banks.find(b => String(b.id)===String(tx.bankId))?.name) : '') || '';
+    const dateStr = window.formatDate?.(tx.date) || (tx.date ? new Date(tx.date).toLocaleDateString('pt-BR') : '') || '';
+    const amountStr = window.formatCurrency?.(tx.amount) || `R$ ${Number(tx.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+
+    return `
+      <div class="tx-card" data-id="${tx.id}">
+        <div class="tx-header">
+          <div class="tx-left">
+            <div class="tx-icon ${iconClass}">${isIncome ? '↑' : '↓'}</div>
+            <h4 class="tx-title">${escapeHtml(tx.description)}</h4>
+          </div>
+          <div class="tx-date">${escapeHtml(dateStr)}</div>
+        </div>
+        <div class="tx-body">
+          <div class="tx-meta">
+            <span>${escapeHtml(categoryName)}</span>
+            ${bankName ? `<span class="sep">-</span><span>${escapeHtml(bankName)}</span>` : ''}
+          </div>
+          <div class="tx-right">
+            <div class="tx-amount ${amountClass}">${amountSign} ${amountStr}</div>
+            <button class="tx-delete" data-id="${tx.id}" aria-label="Excluir transação">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                <path d="M10 11v6"></path>
+                <path d="M14 11v6"></path>
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Ações de exclusão (mantendo integração existente)
+  listEl.querySelectorAll('.tx-delete').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      try {
+        if (window.TransactionsService?.deleteTransaction) {
+          await window.TransactionsService.deleteTransaction(id);
+        }
+        // Atualiza estado local e re-renderiza
+        transactions = (transactions || []).filter((t) => String(t.id) !== String(id));
+        storage.set('transactions', transactions);
+        renderAll();
+        showTransactionsFeedback('Transação excluída', 'success');
+      } catch (err) {
+        console.error('Erro ao excluir transação:', err);
+        showTransactionsFeedback('Erro ao excluir transação', 'error');
+      }
+    });
+  });
+}
+
+
+try {
+  formTx?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const description = String(txDescriptionEl?.value || '').trim();
+    const amount = Number(txAmountEl?.value || 0);
+    const dateInput = String(txDateEl?.value || '');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(dateInput) ? dateInput : parseDateBRToISO(dateInput) || todayISO();
+    const type = String(txTypeEl?.value || 'expense');
+    const categoryId = String(txCategoryEl?.value || '');
+    const bankId = type === 'expense' ? String(txBankEl?.value || '') : '';
+
+    if (!description || !amount || !date || !categoryId || !type) {
+      showTransactionsFeedback('Preencha todos os campos obrigatórios', 'error');
+      return;
+    }
+
+    const localTx = { id: crypto.randomUUID(), description, amount, date, type, categoryId, bankId: bankId || null };
+
+    try {
+      let created = null;
+      if (window.TransactionsService?.createTransaction && canUseSupabase()) {
+        created = await window.TransactionsService.createTransaction(mapLocalTransactionToDb(localTx));
+      } else if (window.TransactionsService?.createTransaction) {
+        // Mesmo sem supabase, o serviço persiste local/outbox
+        created = await window.TransactionsService.createTransaction(mapLocalTransactionToDb(localTx));
+      }
+      const newLocal = created ? mapDbTransactionToLocal(created) : localTx;
+      transactions.unshift(newLocal);
+      storage.set('transactions', transactions);
+      showTransactionsFeedback('Transação adicionada com sucesso', 'success');
+      renderAll();
+      try { window.StateMonitor?.markWrite?.('transactions'); } catch {}
+
+      // Resetar formulário
+      if (txDescriptionEl) txDescriptionEl.value = '';
+      if (txAmountEl) txAmountEl.value = '';
+      if (txDateEl) txDateEl.value = todayISO();
+      if (txTypeEl) txTypeEl.value = 'expense';
+      updateBankVisibility();
+      if (txCategoryEl) txCategoryEl.value = categories[0]?.id || '';
+      if (txBankEl) txBankEl.value = '';
+    } catch (err) {
+      console.error('Erro ao criar transação:', err);
+      showTransactionsFeedback('Falha ao adicionar a transação', 'error');
+    }
+  });
+} catch {}
+function showTransactionsFeedback(message, type = 'success') {
+  const el = document.getElementById('transactions-feedback');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove('success', 'error');
+  el.classList.add(type);
+  el.hidden = false;
+  setTimeout(() => { el.hidden = true; }, 2500);
+}

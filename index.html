@@ -388,7 +388,7 @@
                 </div>
                 <div class="form-group">
                   <label for="tx-date">Data</label>
-                  <input id="tx-date" name="date" type="date" required />
+                  <input id="tx-date" name="date" type="date" lang="pt-BR" required />
                 </div>
                 <div class="form-group">
                   <label for="tx-type">Tipo</label>
@@ -409,6 +409,7 @@
                   <button type="submit" class="btn btn-primary">Adicionar</button>
                 </div>
               </form>
+              <div id="transactions-feedback" class="feedback" hidden></div>
             </div>
 
             <div class="card">
@@ -421,21 +422,9 @@
                     <path d="M17 12h0"></path>
                   </svg>
                 </span>
-                Transações do Mês Atual
+                Transações do Mês Selecionado
               </h2>
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Data</th>
-                    <th>Descrição</th>
-                    <th>Categoria</th>
-                    <th>Banco</th>
-                    <th>Valor</th>
-                    <th>Ações</th>
-                  </tr>
-                </thead>
-                <tbody id="table-transactions"></tbody>
-              </table>
+              <div id="list-transactions" class="transactions-list"></div>
             </div>
           </section>
 
