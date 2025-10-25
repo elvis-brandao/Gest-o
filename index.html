@@ -276,13 +276,29 @@
                 </h2>
               </div>
               <div class="card-content">
-                <div class="goal-stats">
-                  <div class="stat">
-                    <p class="muted">Gasto</p>
+                <div class="goal-stats-cards">
+                  <div class="stat-card shadow-sm">
+                    <div class="card-info">
+                      <button type="button" class="info-icon" aria-label="Mais informações sobre gasto" aria-controls="spent-info-tip" aria-expanded="false">
+                        <img src="./assets/icons/info.svg" alt="" aria-hidden="true" />
+                      </button>
+                      <span id="spent-info-tip" class="tooltip" role="tooltip">O total de gastos do mês selecionado.</span>
+                    </div>
+                    <div class="stat-label-row">
+                      <p class="muted">Gasto</p>
+                    </div>
                     <p id="goal-spent-large" class="stat-value">R$ 0,00</p>
                   </div>
-                  <div class="stat right">
-                    <p class="muted">Meta</p>
+                  <div class="stat-card shadow-sm">
+                    <div class="card-info">
+                      <button type="button" class="info-icon" aria-label="Mais informações sobre meta" aria-controls="goal-info-tip" aria-expanded="false">
+                        <img src="./assets/icons/info.svg" alt="" aria-hidden="true" />
+                      </button>
+                      <span id="goal-info-tip" class="tooltip" role="tooltip">Meta definida de máximo de gastos para o mês selecionado.</span>
+                    </div>
+                    <div class="stat-label-row">
+                      <p class="muted">Meta</p>
+                    </div>
                     <p id="goal-meta-large" class="stat-value">R$ 0,00</p>
                   </div>
                 </div>

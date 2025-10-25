@@ -470,7 +470,73 @@ document.addEventListener('click', (e) => {
     closeMonthPopover();
   } catch {}
 });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMonthPopover(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeMonthPopover(); try { document.querySelectorAll('.tooltip.open').forEach(el => { el.classList.remove('open'); el.previousElementSibling?.setAttribute('aria-expanded','false'); }); } catch {} } });
+// Tooltips: largura dinâmica e clique para alternar (mobile); hover via CSS
+function setTooltipMaxWidth(icon, tip) {
+  try {
+    const iconRect = icon.getBoundingClientRect();
+    const card = icon.closest('.stat-card');
+    const cardRect = card ? card.getBoundingClientRect() : { width: 300 };
+    const minWidth = Math.floor(cardRect.width * 2 / 3);
+    const availableLeft = Math.max(160, Math.floor(iconRect.right - 8));
+    const maxWidth = Math.min(availableLeft, Math.floor(window.innerWidth - 16));
+    const finalMin = Math.min(minWidth, maxWidth);
+    const finalWidth = Math.max(finalMin, Math.min(cardRect.width, maxWidth));
+    tip.style.minWidth = finalMin + 'px';
+    tip.style.maxWidth = maxWidth + 'px';
+    tip.style.width = finalWidth + 'px';
+    tip.style.whiteSpace = 'normal';
+    tip.style.wordBreak = 'break-word';
+    tip.style.overflowWrap = 'anywhere';
+  } catch {}
+}
+document.addEventListener('click', (e) => {
+  try {
+    const icon = e.target.closest('.info-icon');
+    if (icon) {
+      const tipId = icon.getAttribute('aria-controls') || icon.getAttribute('aria-describedby');
+      const tip = tipId ? document.getElementById(tipId) : icon.nextElementSibling;
+      if (tip && tip.classList.contains('tooltip')) {
+        const isOpen = tip.classList.contains('open');
+        document.querySelectorAll('.tooltip.open').forEach(el => {
+          el.classList.remove('open');
+          el.previousElementSibling?.setAttribute('aria-expanded','false');
+        });
+        if (!isOpen) {
+          tip.classList.add('open');
+          icon.setAttribute('aria-expanded', 'true');
+          setTooltipMaxWidth(icon, tip);
+        }
+      }
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
+    // Fechar tooltips abertas ao clicar fora
+    document.querySelectorAll('.tooltip.open').forEach(el => {
+      if (!el.contains(e.target)) {
+        el.classList.remove('open');
+        el.previousElementSibling?.setAttribute('aria-expanded','false');
+      }
+    });
+  } catch {}
+});
+try {
+  document.querySelectorAll('.info-icon').forEach((icon) => {
+    const tipId = icon.getAttribute('aria-controls') || icon.getAttribute('aria-describedby');
+    const tip = tipId ? document.getElementById(tipId) : icon.nextElementSibling;
+    icon.addEventListener('mouseenter', () => { if (tip) setTooltipMaxWidth(icon, tip); });
+    icon.addEventListener('focus', () => { if (tip) setTooltipMaxWidth(icon, tip); });
+  });
+  window.addEventListener('resize', () => {
+    document.querySelectorAll('.info-icon').forEach((icon) => {
+      const tipId = icon.getAttribute('aria-controls') || icon.getAttribute('aria-describedby');
+      const tip = tipId ? document.getElementById(tipId) : icon.nextElementSibling;
+      if (tip && tip.classList.contains('open')) setTooltipMaxWidth(icon, tip);
+    });
+  });
+} catch {}
+
 // Charts
 let pieChart, barChart, goalProgressChart, bankPieChart;
 
@@ -485,6 +551,161 @@ function hexToRgba(hex, alpha = 0.7) {
 
 function ensureCategoryProgressCard() {
   // seção desativada conforme solicitado
+}
+
+// Dashboard: renderização de meta, progresso e gráficos
+function renderDashboard() {
+  try {
+    const spent = monthlyExpenses();
+    const goal = getSelectedMonthlyGoalAmount();
+    const remaining = remainingBudget();
+
+    if (goalSpentLargeEl) goalSpentLargeEl.textContent = formatCurrency(spent);
+    if (goalMetaLargeEl) goalMetaLargeEl.textContent = formatCurrency(goal);
+    if (goalRemainingTextEl) {
+      const rem = Math.max(0, Number(remaining) || 0);
+      goalRemainingTextEl.textContent = `Restante: ${formatCurrency(rem)}`;
+    }
+
+    const progress = Math.max(0, Math.min(100, Number(budgetProgress()) || 0));
+    if (progressFillEl) {
+      progressFillEl.style.width = `${progress}%`;
+      // Gradiente multicolor proporcional às despesas por categoria no mês
+      try {
+        const map = expensesByCat();
+        const entries = Object.entries(map).filter(([k, v]) => k != null && Number(v) > 0);
+        const total = entries.reduce((s, [, v]) => s + Number(v), 0);
+        if (total > 0 && entries.length > 0) {
+          const sorted = entries.sort((a, b) => Number(b[1]) - Number(a[1]));
+          let acc = 0;
+          const stops = [];
+          for (const [catId, val] of sorted) {
+            const part = (Number(val) / total) * 100;
+            const start = acc;
+            const end = acc + part;
+            const cat = categories.find(c => String(c.id) === String(catId));
+            const color = cat?.color || '#9ca3af';
+            stops.push(`${color} ${start.toFixed(2)}%`, `${color} ${end.toFixed(2)}%`);
+            acc = end;
+          }
+          progressFillEl.style.backgroundImage = `linear-gradient(to right, ${stops.join(', ')})`;
+          progressFillEl.style.backgroundColor = '';
+        } else {
+          progressFillEl.style.backgroundImage = '';
+          progressFillEl.style.backgroundColor = '#3b82f6';
+        }
+      } catch {
+        progressFillEl.style.backgroundImage = '';
+        progressFillEl.style.backgroundColor = '#3b82f6';
+      }
+    }
+    if (progressPercentEl) {
+      const pctStr = Number.isFinite(progress) ? Number(progress).toFixed(1) : '0.0';
+      progressPercentEl.textContent = `Progresso: ${pctStr}%`;
+    }
+    if (progressWarningEl) {
+      const over = (goal > 0) && (spent > goal);
+      progressWarningEl.hidden = !over;
+      if (over) progressWarningEl.textContent = 'Atenção: meta excedida';
+    }
+    if (progressSpentEl) progressSpentEl.textContent = `Gasto: ${formatCurrency(spent)}`;
+    if (progressGoalEl) progressGoalEl.textContent = `Meta: ${formatCurrency(goal)}`;
+
+    // Gráficos mínimos em canvas
+    drawIncomeVsExpense();
+    drawPieExpensesByCategory();
+    drawPieExpensesByBank();
+  } catch (e) {
+    console.warn('renderDashboard error:', e);
+  }
+}
+
+function drawIncomeVsExpense() {
+  const canvas = document.getElementById('bar-income-vs-expense');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = (canvas.width = canvas.clientWidth || 320);
+  const h = (canvas.height = canvas.clientHeight || 160);
+  ctx.clearRect(0, 0, w, h);
+
+  const income = monthlyIncome();
+  const expense = monthlyExpenses();
+  const max = Math.max(income, expense, 1);
+  const barW = Math.min(80, Math.floor(w / 4));
+  const gap = Math.floor(w / 6);
+  const baseY = h - 20;
+  const scale = (h - 40) / max;
+  const incomeH = Math.round(income * scale);
+  const expenseH = Math.round(expense * scale);
+
+  // Barra de receitas (verde)
+  const incomeX = Math.floor(w / 2 - gap);
+  ctx.fillStyle = '#16a34a';
+  ctx.fillRect(incomeX, baseY - incomeH, barW, incomeH);
+
+  // Barra de despesas (vermelho)
+  const expenseX = Math.floor(w / 2 + gap - barW);
+  ctx.fillStyle = '#dc2626';
+  ctx.fillRect(expenseX, baseY - expenseH, barW, expenseH);
+
+  // Rótulos
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '12px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`Receitas: ${formatCurrency(income)}`, incomeX + barW / 2, baseY - incomeH - 6);
+  ctx.fillText(`Despesas: ${formatCurrency(expense)}`, expenseX + barW / 2, baseY - expenseH - 6);
+}
+
+function drawPieFromMap(canvasId, map, colorGetter) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = (canvas.width = canvas.clientWidth || 240);
+  const h = (canvas.height = canvas.clientHeight || 240);
+  ctx.clearRect(0, 0, w, h);
+
+  const entries = Object.entries(map).filter(([_, v]) => Number(v) > 0);
+  const total = entries.reduce((s, [, v]) => s + Number(v), 0);
+  if (!entries.length || total <= 0) {
+    ctx.fillStyle = '#6b7280';
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Sem dados', w / 2, h / 2);
+    return;
+  }
+  let start = -Math.PI / 2;
+  const cx = w / 2, cy = h / 2, r = Math.min(w, h) / 2 - 10;
+  entries.forEach(([key, val], idx) => {
+    const frac = Number(val) / total;
+    const end = start + frac * 2 * Math.PI;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, start, end);
+    ctx.closePath();
+    const color = colorGetter(key, idx);
+    ctx.fillStyle = color;
+    ctx.fill();
+    start = end;
+  });
+}
+
+function drawPieExpensesByCategory() {
+  const map = expensesByCat();
+  const colorGetter = (key, idx) => {
+    const cat = categories.find(c => String(c.id) === String(key));
+    const base = cat?.color || ['#3b82f6','#f59e0b','#10b981','#ef4444','#6366f1','#14b8a6','#f43f5e','#84cc16'][idx % 8];
+    return hexToRgba(base, 0.8);
+  };
+  drawPieFromMap('pie-expenses-by-category', map, colorGetter);
+}
+
+function drawPieExpensesByBank() {
+  const map = expensesByBank();
+  const colorGetter = (_key, idx) => {
+    const palette = ['#0ea5e9','#f97316','#22c55e','#eab308','#a855f7','#06b6d4','#ef4444','#84cc16'];
+    return hexToRgba(palette[idx % palette.length], 0.8);
+  };
+  drawPieFromMap('pie-expenses-by-bank', map, colorGetter);
 }
 
 // Navegação

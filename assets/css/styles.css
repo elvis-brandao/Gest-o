@@ -434,10 +434,71 @@ input.with-icon { padding-left: 34px; }
 .card-header { padding: 16px 16px 0; }
 .card-content { padding: 0 16px 16px; }
 .icon-wallet { display: inline-flex; align-items: center; margin-right: 8px; color: #2563eb; }
-.goal-stats { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
-.goal-stats .stat .muted { color: var(--muted-foreground); font-size: 0.9rem; }
-.goal-stats .stat .stat-value { color: var(--color-text); line-height: 1.2; }
-.goal-stats .stat.right { text-align: right; }
+.goal-stats-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px; }
+
+.stat-card {
+   background-color: var(--color-surface);
+   border-radius: 12px;
+   padding: 16px;
+   box-shadow: var(--shadow-sm);
+   border: 1px solid rgba(0,0,0,0.06);
+   transition: all 0.2s ease;
+   text-align: center;
+ }
+ 
+ .stat-card:hover {
+   background-color: rgba(59, 130, 246, 0.02);
+   box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+   border-color: rgba(0,0,0,0.12);
+   transform: translateY(-1px);
+ }
+ 
+ .stat-card { position: relative; overflow: visible; }
+ .card-info { position: absolute; top: 0px; right: 8px; display: inline-flex; align-items: center; justify-content: center; }
+ 
+ .stat-label-row { display: flex; align-items: center; justify-content: center; gap: 8px; position: relative; margin-bottom: 8px; }
+  .stat-label-row .muted { margin: 0; line-height: 1; }
+ .stat-info-row { display: inline-flex; align-items: center; gap: 8px; position: relative; justify-content: center; }
+ .info-icon { background: transparent; border: none; color: var(--muted-foreground); display: inline-flex; align-items: center; justify-content: center; width: 1em; height: 1em; line-height: 1; padding: 0; margin: 0; box-sizing: border-box; cursor: pointer; }
+ .info-icon:hover { color: var(--color-primary); }
+ .info-icon:focus { outline: 2px solid rgba(37, 99, 235, 0.4); outline-offset: 2px; }
+ .info-icon svg { display: block; width: 100%; height: 100%; }
+  .info-icon img { display: block; width: 100%; height: 100%; }
+ 
+ .tooltip { position: absolute; top: calc(100% + 6px); right: 0; left: auto; background: var(--color-surface); color: var(--color-text); border: 1px solid rgba(0,0,0,0.12); box-shadow: var(--shadow-sm); border-radius: 8px; padding: 8px 10px; font-size: 0.85rem; white-space: normal; overflow-wrap: anywhere; word-break: break-word; opacity: 0; pointer-events: none; transition: opacity .15s ease, transform .15s ease; z-index: 1000; transform: translateY(-2px); }
+   .tooltip.open { opacity: 1; transform: translateY(0); pointer-events: auto; }
+   .info-icon:hover + .tooltip, .info-icon:focus + .tooltip { opacity: 1; transform: translateY(0); pointer-events: auto; }
+ 
+ .stat-card .muted { 
+   color: var(--muted-foreground); 
+   font-size: 0.9rem; 
+   margin: 0 0 8px 0;
+ }
+ 
+ .stat-card .stat-info {
+   color: var(--muted-foreground);
+   font-size: 0.85rem;
+   margin: 4px 0 8px;
+ }
+ 
+ /* Desktop: usar tooltip e ocultar texto descritivo para reduzir ruído */
+ @media (min-width: 601px) {
+   .stat-card .stat-info { display: none; }
+ }
+ 
+ /* Mobile: aumentar fonte dos labels e manter tooltip por clique */
+ @media (max-width: 768px) {
+   .stat-card .muted { font-size: 1.08rem; }
+   .stat-label-row { gap: 8px; }
+ }
+ 
+ .stat-card .stat-value { 
+   color: var(--color-text); 
+   line-height: 1.2; 
+   margin: 0;
+   font-weight: 600;
+   font-size: 1.75rem;
+ }
 .muted { color: var(--muted-foreground); }
 
 /* Desktop-only font size for goal values */
@@ -632,6 +693,20 @@ input.with-icon { padding-left: 34px; }
   .color-options { grid-template-columns: repeat(6, 36px); justify-content: space-between; }
   .color-swatch { width: 32px; height: 32px; }
   #cat-color { width: 56px; height: 40px; }
+  
+  /* Cards de gasto e meta em coluna única em mobile */
+  .goal-stats-cards { 
+    grid-template-columns: 1fr; 
+    gap: 12px; 
+  }
+  
+  .stat-card {
+    padding: 14px;
+  }
+  
+  .stat-card .stat-value {
+    font-size: 1.5rem;
+  }
 }
 .color-preview { width: 36px; height: 36px; border-radius: 10px; border: 3px solid #ddd; box-shadow: var(--shadow-sm); transition: background-color .2s ease, border-color .2s ease, transform .2s ease; }
 .color-preview.confirmed { border-color: var(--color-primary); transform: scale(1.02); }
