@@ -759,23 +759,28 @@ function renderTransactions() {
 
   if (listTransactionsEl) {
     listTransactionsEl.innerHTML = cards || `<div class="muted" style="text-align:center">Nenhuma transação registrada neste mês</div>`;
-    // Ações de excluir
-    listTransactionsEl.querySelectorAll('.tx-delete').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const id = btn.dataset.id;
-        const ok = window.confirm('Tem certeza que deseja excluir esta transação?');
-        if (!ok) return;
-        try {
-          if (canUseSupabase() && window.TransactionsService?.deleteTransaction) {
-            await window.TransactionsService.deleteTransaction(id);
-          }
-        } catch (err) { console.warn('deleteTransaction supabase error:', err); }
-        transactions = transactions.filter(t => String(t.id) !== String(id));
-        storage.set('transactions', transactions);
+    // Ações de excluir (delegação em captura para bloquear handlers paralelos)
+    listTransactionsEl.addEventListener('click', async (e) => {
+      const btn = e.target && e.target.closest?.('.tx-delete');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      try { e.stopImmediatePropagation?.(); } catch {}
+      const id = btn.dataset.id;
+      try {
+        if (window.TransactionsService?.deleteTransaction) {
+          await window.TransactionsService.deleteTransaction(id);
+        }
+        // Recarregar dados via serviço (mês selecionado) e re-renderizar
+        try { await hydrateAllData(); } catch {}
         renderAll();
+        showTransactionsFeedback('Transação excluída com sucesso', 'success');
         try { window.StateMonitor?.markWrite?.('transactions'); } catch {}
-      });
-    });
+      } catch (err) {
+        console.error('Erro ao excluir transação:', err);
+        showTransactionsFeedback('Erro ao excluir transação', 'error');
+      }
+    }, { capture: true });
   }
 }
 
@@ -1129,25 +1134,28 @@ function renderTransactions(transactions = []) {
     `;
   }).join('');
 
-  // Ações de exclusão (mantendo integração existente)
-  listEl.querySelectorAll('.tx-delete').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const id = btn.dataset.id;
-      try {
-        if (window.TransactionsService?.deleteTransaction) {
-          await window.TransactionsService.deleteTransaction(id);
-        }
-        // Atualiza estado local e re-renderiza
-        transactions = (transactions || []).filter((t) => String(t.id) !== String(id));
-        storage.set('transactions', transactions);
-        renderAll();
-        showTransactionsFeedback('Transação excluída', 'success');
-      } catch (err) {
-        console.error('Erro ao excluir transação:', err);
-        showTransactionsFeedback('Erro ao excluir transação', 'error');
+  // Ações de exclusão (delegação em captura para bloquear handlers paralelos)
+  listEl.addEventListener('click', async (e) => {
+    const btn = e.target && e.target.closest?.('.tx-delete');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    try { e.stopImmediatePropagation?.(); } catch {}
+    const id = btn.dataset.id;
+    try {
+      if (window.TransactionsService?.deleteTransaction) {
+        await window.TransactionsService.deleteTransaction(id);
       }
-    });
-  });
+      // Recarregar dados via serviço (mês selecionado) e re-renderizar
+      try { await hydrateAllData(); } catch {}
+      renderAll();
+      showTransactionsFeedback('Transação excluída com sucesso', 'success');
+      try { window.StateMonitor?.markWrite?.('transactions'); } catch {}
+    } catch (err) {
+      console.error('Erro ao excluir transação:', err);
+      showTransactionsFeedback('Erro ao excluir transação', 'error');
+    }
+  }, { capture: true });
 }
 
 
