@@ -56,6 +56,34 @@ async function hydrateAllData() {
   } catch (e) {
     console.warn('hydrateAllData(banks) error:', e);
   }
+  try {
+    if (window.CategoriesService?.fetchCategories) {
+      const items = await window.CategoriesService.fetchCategories();
+      if (Array.isArray(items)) {
+        categories = items.map(c => ({ id: c.id, name: c.name, color: c.color ?? '#6200ee' }));
+        storage.set('categories', categories);
+      }
+    }
+  } catch (e) {
+    console.warn('hydrateAllData(categories) error:', e);
+  }
+  try {
+    if (window.TransactionsService?.fetchTransactionsByMonth) {
+      const rows = await window.TransactionsService.fetchTransactionsByMonth(selectedMonth);
+      if (Array.isArray(rows)) {
+        transactions = rows.map(mapDbTransactionToLocal);
+        storage.set('transactions', transactions);
+      }
+    } else if (window.TransactionsService?.fetchTransactions) {
+      const rows = await window.TransactionsService.fetchTransactions();
+      if (Array.isArray(rows)) {
+        transactions = rows.map(mapDbTransactionToLocal);
+        storage.set('transactions', transactions);
+      }
+    }
+  } catch (e) {
+    console.warn('hydrateAllData(transactions) error:', e);
+  }
 }
 
 // Helpers Supabase/Mapeamentos
@@ -161,9 +189,206 @@ const formCat = document.getElementById('form-category');
 const catNameEl = document.getElementById('cat-name');
 const catColorEl = document.getElementById('cat-color');
 const gridCategoriesEl = document.getElementById('grid-categories');
+// Popup central com botão gatilho e cores recentes
+try {
+  const btnOpenColorEl = document.getElementById('btn-open-color');
+  const colorDotEl = document.getElementById('color-dot');
+  const popupEl = document.getElementById('cat-color-popup');
+  const customColorEl = document.getElementById('cat-color-custom');
+  const applyBtnEl = document.getElementById('btn-color-apply');
+  const overlayEl = document.getElementById('color-overlay');
+  const announceEl = document.getElementById('color-announce');
+  const recentContainerEl = document.querySelector('.recent-options');
+  let tempColor = null;
+  const getRecentColors = () => {
+    try { return JSON.parse(localStorage.getItem('recentCategoryColors')||'[]'); } catch { return []; }
+  };
+  const setRecentColors = (arr) => localStorage.setItem('recentCategoryColors', JSON.stringify(arr));
+  const pushRecentColor = (color) => {
+    if (!color) return;
+    let arr = getRecentColors();
+    arr = [color, ...arr.filter(c => c !== color)].slice(0, 8);
+    setRecentColors(arr);
+    renderRecentColors();
+  };
+  const renderRecentColors = () => {
+    if (!recentContainerEl) return;
+    const arr = getRecentColors();
+    recentContainerEl.innerHTML = '';
+    arr.forEach((color) => {
+      const btn = document.createElement('button');
+      btn.className = 'color-swatch';
+      btn.setAttribute('data-color', color);
+      btn.style.backgroundColor = color;
+      btn.addEventListener('click', () => {
+        tempColor = color;
+        popupEl.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        updateApplyPreview(tempColor);
+        if (catColorEl) catColorEl.value = tempColor; // refletir em tempo real
+        if (announceEl) announceEl.textContent = `Cor selecionada ${color}`;
+      });
+      recentContainerEl.appendChild(btn);
+    });
+  };
+  const getTextColorForBg = (bg) => {
+    try {
+      const c = bg.replace('#','');
+      const r = parseInt(c.substring(0,2),16), g = parseInt(c.substring(2,4),16), b = parseInt(c.substring(4,6),16);
+      const luminance = (0.299*r + 0.587*g + 0.114*b);
+      return luminance > 186 ? '#111' : '#fff';
+    } catch { return '#fff'; }
+  };
+  const updateApplyPreview = (color) => {
+    if (!applyBtnEl || !color) return;
+    applyBtnEl.style.backgroundColor = color;
+    applyBtnEl.style.color = getTextColorForBg(color);
+  };
+  // Restaura última cor
+  const lastColor = localStorage.getItem('lastCategoryColor');
+  if (lastColor && catColorEl) {
+    catColorEl.value = lastColor;
+    colorDotEl && (colorDotEl.style.backgroundColor = lastColor);
+    customColorEl && (customColorEl.value = lastColor);
+    updateApplyPreview(lastColor);
+  } else if (catColorEl && colorDotEl) {
+    colorDotEl.style.backgroundColor = catColorEl.value || '#6200ee';
+    updateApplyPreview(catColorEl.value || '#6200ee');
+  }
+  renderRecentColors();
+  const ensureInBody = () => {
+    try {
+      if (overlayEl && overlayEl.parentNode !== document.body) document.body.appendChild(overlayEl);
+      if (popupEl && popupEl.parentNode !== document.body) document.body.appendChild(popupEl);
+      if (popupEl) popupEl.style.position = 'fixed';
+      if (overlayEl) overlayEl.style.position = 'fixed';
+    } catch {}
+  };
+  const positionPopupCenteredToContent = () => {
+    try {
+      const container = document.querySelector('.page-container') || document.body;
+      const rect = container.getBoundingClientRect();
+      const centerX = Math.round(rect.left + rect.width / 2 + window.scrollX);
+      const centerY = Math.round(window.scrollY + window.innerHeight / 2);
+      popupEl.style.left = `${centerX}px`;
+      popupEl.style.top = `${centerY}px`;
+      popupEl.style.transform = 'translate(-50%, -50%)';
+      popupEl.style.right = 'auto';
+      popupEl.style.bottom = 'auto';
+    } catch {}
+  };
+  const openPopup = () => {
+    if (!popupEl) return;
+    ensureInBody();
+    positionPopupCenteredToContent();
+    popupEl.hidden = false;
+    popupEl.classList.add('show');
+    overlayEl && (overlayEl.hidden = false, overlayEl.classList.add('show'));
+    btnOpenColorEl && btnOpenColorEl.setAttribute('aria-expanded','true');
+    const firstInteractive = popupEl.querySelector('.color-swatch') || customColorEl;
+    if (firstInteractive && firstInteractive.focus) firstInteractive.focus();
+    if (announceEl) announceEl.textContent = 'Seleção de cor aberta';
+  };
+  const closePopup = () => {
+    if (!popupEl) return;
+    popupEl.classList.remove('show');
+    popupEl.hidden = true;
+    overlayEl && (overlayEl.classList.remove('show'), overlayEl.hidden = true);
+    btnOpenColorEl && btnOpenColorEl.setAttribute('aria-expanded','false');
+    if (announceEl) announceEl.textContent = 'Seleção de cor fechada';
+  };
+  // Abrir via botão gatilho
+  btnOpenColorEl?.addEventListener('click', () => openPopup());
+  // Fechar ao clicar fora
+  overlayEl?.addEventListener('click', () => closePopup());
+  // Seleção via swatches da paleta fixa
+  popupEl?.querySelectorAll('.color-options .color-swatch')?.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const color = btn.getAttribute('data-color');
+      tempColor = color;
+      popupEl.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      updateApplyPreview(tempColor);
+      if (catColorEl) catColorEl.value = tempColor; // refletir em tempo real
+      if (announceEl) announceEl.textContent = `Cor selecionada ${color}`;
+    });
+  });
+  // Seleção via input de cor personalizado em tempo real
+  customColorEl?.addEventListener('input', () => {
+    tempColor = customColorEl.value;
+    updateApplyPreview(tempColor);
+    if (catColorEl) catColorEl.value = tempColor; // refletir em tempo real
+  });
+  // Confirmar
+  applyBtnEl?.addEventListener('click', () => {
+    const chosen = tempColor || customColorEl?.value || catColorEl?.value;
+    if (chosen && catColorEl) {
+      catColorEl.value = chosen;
+      localStorage.setItem('lastCategoryColor', chosen);
+      pushRecentColor(chosen);
+      colorDotEl && (colorDotEl.style.backgroundColor = chosen);
+      try { catColorEl.dispatchEvent(new Event('input', { bubbles: true })); } catch {}
+      try { showCategoriesFeedback('Cor confirmada', 'success'); } catch {}
+      if (announceEl) announceEl.textContent = `Cor confirmada ${chosen}`;
+    }
+    closePopup();
+  });
+  // Fechar com ESC
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePopup(); });
+  // Reposicionar ao redimensionar
+  window.addEventListener('resize', () => { if (!popupEl?.hidden) positionPopupCenteredToContent(); });
+} catch {}
 const formMonthlyGoal = document.getElementById('form-monthly-goal');
-const goalAmountEl = document.getElementById('goal-amount');
 
+// Categorias: submit de nova categoria
+formCat?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = catNameEl?.value?.trim();
+  const color = catColorEl?.value || '#6200ee';
+  if (!name) return;
+  try {
+    const row = await window.CategoriesService?.createCategory?.({ name, color });
+    // Após criar, preferir refetch remoto para garantir consistência
+    try {
+      const refreshed = await window.CategoriesService?.fetchCategories?.();
+      categories = Array.isArray(refreshed) ? refreshed : [row, ...categories];
+    } catch {
+      categories = [row, ...categories];
+    }
+    storage.set('categories', categories);
+  } catch (err) { console.warn('createCategory error:', err); }
+  if (catNameEl) catNameEl.value = '';
+  renderCategories();
+  const el = document.getElementById('categories-feedback');
+  if (el) {
+    el.textContent = `Categoria "${name}" adicionada com sucesso`;
+    el.classList.remove('success', 'error');
+    el.classList.add('success');
+    el.hidden = false;
+    setTimeout(() => { el.hidden = true; }, 2500);
+  }
+  try { window.StateMonitor?.markWrite?.('categories'); } catch {}
+});
+const goalAmountEl = document.getElementById('goal-amount');
+// Metas mensais: submit para salvar/atualizar
+formMonthlyGoal?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    const amount = Number(goalAmountEl?.value || 0);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    const saved = await window.GoalsService?.saveMonthlyGoalFor?.(selectedMonth, amount);
+    const finalAmount = Number(saved?.target_amount ?? amount) || 0;
+    monthlyGoalsMap[selectedMonth] = finalAmount;
+    storage.set('monthlyGoals', monthlyGoalsMap);
+    renderGoals();
+    renderSummary();
+    showGoalsFeedback('Meta atualizada com sucesso', 'success');
+    try { window.StateMonitor?.markWrite?.('goals'); } catch {}
+  } catch (err) {
+    console.warn('saveMonthlyGoalFor error:', err);
+    showGoalsFeedback('Falha ao atualizar meta', 'error');
+  }
+});
 
 // Bancos: refs de DOM
 const formBank = document.getElementById('form-bank');
@@ -499,48 +724,106 @@ function renderTransactions() {
         transactions = transactions.filter(t => String(t.id) !== String(id));
         storage.set('transactions', transactions);
         renderAll();
+        try { window.StateMonitor?.markWrite?.('transactions'); } catch {}
       });
     });
   }
 }
 
 function renderCategories() {
-  // seção de metas por categoria removida
-  // grid
-  if (!gridCategoriesEl) return;
-  gridCategoriesEl.innerHTML = categories.map(c => `
-    <div class="category-card" style="border-left-color:${c.color}">
-      <div class="category-header">
-        <h3>${c.name}</h3>
-        <button class="action delete" data-id="${c.id}" aria-label="Excluir categoria" title="Excluir" type="button">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="3 6 5 6 21 6"></polyline>
-            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
-            <path d="M10 11v6"></path>
-            <path d="M14 11v6"></path>
-            <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
-          </svg>
-        </button>
-      </div>
-      <div class="category-color" style="background:${c.color}"></div>
-    </div>
-  `).join('');
-  gridCategoriesEl.querySelectorAll('button.delete').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id = btn.dataset.id;
-      const ok = window.confirm('Tem certeza que deseja excluir esta categoria?');
-      if (!ok) return;
+  const grid = document.getElementById('grid-categories');
+  const categoriesCountEl = document.getElementById('categories-count');
+  if (!grid) return;
+
+  // Update count badge
+  if (categoriesCountEl) {
+    categoriesCountEl.textContent = String(categories.length);
+  }
+
+  grid.innerHTML = '';
+
+  if (!categories || categories.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'Nenhuma categoria cadastrada ainda';
+    grid.appendChild(empty);
+    return;
+  }
+
+  categories.forEach(c => {
+    const card = document.createElement('div');
+    card.className = 'category-card';
+
+    const header = document.createElement('div');
+    header.className = 'category-header';
+
+    const title = document.createElement('div');
+    title.className = 'category-title';
+
+    const colorDot = document.createElement('span');
+    colorDot.className = 'category-dot';
+    colorDot.style.background = c.color || '#6200ee';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'category-name';
+    nameEl.textContent = c.name;
+
+    title.appendChild(colorDot);
+    title.appendChild(nameEl);
+
+    const btnDelete = document.createElement('button');
+    btnDelete.type = 'button';
+    btnDelete.className = 'category-delete action delete';
+    btnDelete.setAttribute('aria-label', 'Excluir categoria');
+    btnDelete.setAttribute('title', 'Excluir');
+    btnDelete.innerHTML = `
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="3 6 5 6 21 6"></polyline>
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+        <path d="M10 11v6"></path>
+        <path d="M14 11v6"></path>
+        <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
+      </svg>`;
+
+    btnDelete.addEventListener('click', async () => {
+      const catName = c.name;
+      btnDelete.disabled = true;
       try {
-        if (canUseSupabase() && window.CategoriesService?.deleteCategory) {
-          await window.CategoriesService.deleteCategory(id);
-        }
-      } catch (err) { console.warn('deleteCategory supabase error:', err); }
-      categories = categories.filter(c => String(c.id) !== String(id));
+        await window.CategoriesService?.deleteCategory?.(c.id);
+      } catch (e) {
+        console.error('Erro ao excluir categoria:', e);
+      }
+      let refreshed = null;
+      try {
+        refreshed = await window.CategoriesService?.fetchCategories?.();
+      } catch {}
+      const refreshedList = Array.isArray(refreshed) ? refreshed : categories.filter(x => x.id !== c.id);
+      const stillExists = refreshedList.some(x => String(x.id) === String(c.id));
+      categories = refreshedList;
       storage.set('categories', categories);
-      categoryGoals = categoryGoals.filter(g => String(g.categoryId) !== String(id));
-      storage.set('categoryGoals', categoryGoals);
-      renderAll();
+      if (!stillExists) {
+        // Limpa metas associadas à categoria excluída
+        categoryGoals = categoryGoals.filter(g => String(g.categoryId) !== String(c.id));
+        storage.set('categoryGoals', categoryGoals);
+      }
+      renderCategories();
+      const el = document.getElementById('categories-feedback');
+      if (el) {
+        el.textContent = stillExists ? `Falha ao excluir categoria "${catName}"` : `Categoria "${catName}" excluída com sucesso`;
+        el.classList.remove('success', 'error');
+        el.classList.add(stillExists ? 'error' : 'success');
+        el.hidden = false;
+        setTimeout(() => { el.hidden = true; }, 2500);
+      }
+      try { window.StateMonitor?.markWrite?.('categories'); } catch {}
+      btnDelete.disabled = false;
     });
+
+    header.appendChild(title);
+    card.appendChild(header);
+    card.appendChild(btnDelete);
+
+    grid.appendChild(card);
   });
 }
 
@@ -563,6 +846,26 @@ try { txTypeEl?.addEventListener('change', updateBankVisibility); } catch {}
 // Renderização de bancos
 function showBanksFeedback(message, type = 'success') {
   const el = document.getElementById('banks-feedback');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove('success', 'error');
+  el.classList.add(type);
+  el.hidden = false;
+  setTimeout(() => { el.hidden = true; }, 2500);
+}
+
+function showGoalsFeedback(message, type = 'success') {
+  const el = document.getElementById('goals-feedback');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove('success', 'error');
+  el.classList.add(type);
+  el.hidden = false;
+  setTimeout(() => { el.hidden = true; }, 2500);
+}
+
+function showCategoriesFeedback(message, type = 'success') {
+  const el = document.getElementById('categories-feedback');
   if (!el) return;
   el.textContent = message;
   el.classList.remove('success', 'error');
@@ -620,11 +923,10 @@ function renderBanks() {
       // Evitar múltiplos cliques
       btnDelete.disabled = true;
       try {
-        // Sempre delegar a exclusão ao serviço (ele decide remoto/offline)
-        await window.BanksService?.deleteBank?.(b.id);
-      } catch (e) {
-        console.error('Erro ao excluir banco:', e);
-      }
+        if (window.BanksService?.deleteBank) {
+          await window.BanksService.deleteBank(b.id);
+        }
+      } catch (e) { console.error('Erro ao excluir banco:', e); }
       // Refazer fetch para espelhar estado do servidor ou cache do serviço
       let refreshed = null;
       try {
@@ -635,11 +937,8 @@ function renderBanks() {
       banks = refreshedList;
       storage.set('banks', banks);
       renderBanks();
-      if (stillExists) {
-        showBanksFeedback(`Falha ao excluir banco \"${bankName}\"`, 'error');
-      } else {
-        showBanksFeedback(`Banco \"${bankName}\" excluído com sucesso`, 'success');
-      }
+      showBanksFeedback(stillExists ? `Falha ao excluir banco "${bankName}"` : `Banco "${bankName}" excluído com sucesso`, stillExists ? 'error' : 'success');
+      try { window.StateMonitor?.markWrite?.('banks'); } catch {}
       btnDelete.disabled = false;
     });
 
@@ -677,6 +976,7 @@ formBank?.addEventListener('submit', async (e) => {
   if (bankNameEl) bankNameEl.value = '';
   renderAll();
   showBanksFeedback(`Banco "${name}" adicionado com sucesso`, 'success');
+  try { window.StateMonitor?.markWrite?.('banks'); } catch {}
 });
 
 function renderAll() {
@@ -692,3 +992,19 @@ function renderAll() {
     console.warn('Falha ao renderizar:', err);
   }
 }
+
+// Inicializa monitoramento de estado e feedback visual
+try {
+  window.StateMonitor?.init?.();
+  // Feedback visual de sincronização
+  window.addEventListener('sync:refresh-start', () => {
+    if (currentRoute === 'categories') showCategoriesFeedback('Atualizando dados...', 'success');
+    if (currentRoute === 'banks') showBanksFeedback('Atualizando dados...', 'success');
+  });
+  window.addEventListener('sync:refresh-done', (ev) => {
+    const ok = !!ev?.detail?.ok;
+    if (currentRoute === 'categories') showCategoriesFeedback(ok ? 'Dados atualizados' : 'Falha ao atualizar', ok ? 'success' : 'error');
+    if (currentRoute === 'banks') showBanksFeedback(ok ? 'Dados atualizados' : 'Falha ao atualizar', ok ? 'success' : 'error');
+    try { renderAll(); } catch {}
+  });
+} catch {}

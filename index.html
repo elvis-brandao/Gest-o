@@ -441,50 +441,80 @@
 
           <!-- Categorias -->
           <section id="page-categories" class="page hidden">
-            <div class="card">
-              <h2 class="card-title">
-                <span class="icon-list" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="8" y1="6" x2="21" y2="6"></line>
-                    <line x1="8" y1="12" x2="21" y2="12"></line>
-                    <line x1="8" y1="18" x2="21" y2="18"></line>
-                    <circle cx="4" cy="6" r="1.5"></circle>
-                    <circle cx="4" cy="12" r="1.5"></circle>
-                    <circle cx="4" cy="18" r="1.5"></circle>
-                  </svg>
-                </span>
-                Nova Categoria
-              </h2>
-              <form id="form-category" class="form-grid small">
-                <div class="form-group">
-                  <label for="cat-name">Nome</label>
-                  <input id="cat-name" name="name" type="text" required />
-                </div>
-                <div class="form-group">
-                  <label for="cat-color">Cor</label>
-                  <input id="cat-color" name="color" type="color" value="#6200ee" required />
-                </div>
-                <div class="form-group form-actions">
-                  <button type="submit" class="btn btn-primary">Adicionar</button>
-                </div>
-              </form>
-            </div>
+            <div class="page-grid">
+              <div class="card shadow-sm">
+                <h2 class="card-title">
+                  <span class="icon-list" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="8" y1="6" x2="21" y2="6"></line>
+                      <line x1="8" y1="12" x2="21" y2="12"></line>
+                      <line x1="8" y1="18" x2="21" y2="18"></line>
+                      <circle cx="4" cy="6" r="1.5"></circle>
+                      <circle cx="4" cy="12" r="1.5"></circle>
+                      <circle cx="4" cy="18" r="1.5"></circle>
+                    </svg>
+                  </span>
+                  Nova Categoria
+                </h2>
+                <form id="form-category" class="form-grid small">
+                  <div class="form-group">
+                    <label for="cat-name">Nome</label>
+                    <input id="cat-name" name="name" type="text" required />
+                  </div>
+                  <div class="form-group">
+                    <label id="label-cat-color" for="btn-open-color">Cor</label>
+                     <div class="color-picker-row">
+                       <input id="cat-color" name="color" type="hidden" value="#6200ee" />
+                       <button type="button" id="btn-open-color" class="color-trigger" aria-haspopup="dialog" aria-expanded="false">
+                         <span id="color-dot" class="color-dot" aria-label="Cor selecionada" style="background-color:#6200ee"></span>
+                       </button>
+                       <div id="color-overlay" class="color-overlay" hidden></div>
+                       <div id="cat-color-popup" class="color-popup center" role="dialog" aria-modal="true" aria-labelledby="label-cat-color" hidden>
+                         <h3 class="card-title popup-title">Selecione uma cor</h3>
+                         <div id="color-announce" class="sr-only" aria-live="polite"></div>
+                         <div class="recent-options" aria-label="Cores recentes"></div>
+                         <div class="color-options" role="listbox" aria-label="Paleta">
+                           <button class="color-swatch" data-color="#6200ee" aria-label="Roxo" style="background-color:#6200ee"></button>
+                           <button class="color-swatch" data-color="#ff6b6b" aria-label="Vermelho" style="background-color:#ff6b6b"></button>
+                           <button class="color-swatch" data-color="#ffd166" aria-label="Amarelo" style="background-color:#ffd166"></button>
+                           <button class="color-swatch" data-color="#06d6a0" aria-label="Verde" style="background-color:#06d6a0"></button>
+                           <button class="color-swatch" data-color="#118ab2" aria-label="Azul" style="background-color:#118ab2"></button>
+                           <button class="color-swatch" data-color="#8338ec" aria-label="Violeta" style="background-color:#8338ec"></button>
+                           <button class="color-swatch" data-color="#ff9f1c" aria-label="Laranja" style="background-color:#ff9f1c"></button>
+                           <button class="color-swatch" data-color="#2ec4b6" aria-label="Verde água" style="background-color:#2ec4b6"></button>
+                           <button class="color-swatch" data-color="#e0e0e0" aria-label="Cinza" style="background-color:#e0e0e0"></button>
+                         </div>
+                         <div class="color-custom">
+                           <input type="color" id="cat-color-custom" value="#6200ee" aria-label="Cor personalizada" />
+                         </div>
+                         <button type="button" id="btn-color-apply" class="btn btn-primary">Confirmar</button>
+                       </div>
+                     </div>
+                  </div>
+                  <div class="form-group form-actions">
+                    <button type="submit" class="btn btn-primary">Adicionar</button>
+                  </div>
+                </form>
+              </div>
 
-            <div class="card">
-              <h2 class="card-title">
-                <span class="icon-list" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="8" y1="6" x2="21" y2="6"></line>
-                    <line x1="8" y1="12" x2="21" y2="12"></line>
-                    <line x1="8" y1="18" x2="21" y2="18"></line>
-                    <circle cx="4" cy="6" r="1.5"></circle>
-                    <circle cx="4" cy="12" r="1.5"></circle>
-                    <circle cx="4" cy="18" r="1.5"></circle>
-                  </svg>
-                </span>
-                Categorias
-              </h2>
-              <div id="grid-categories" class="grid-categories"></div>
+              <div class="card shadow-sm categories-card">
+                <h2 class="card-title">
+                  <span class="icon-list" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="8" y1="6" x2="21" y2="6"></line>
+                      <line x1="8" y1="12" x2="21" y2="12"></line>
+                      <line x1="8" y1="18" x2="21" y2="18"></line>
+                      <circle cx="4" cy="6" r="1.5"></circle>
+                      <circle cx="4" cy="12" r="1.5"></circle>
+                      <circle cx="4" cy="18" r="1.5"></circle>
+                    </svg>
+                  </span>
+                  Categorias
+                  <span id="categories-count" class="count-badge" aria-label="Total de categorias"></span>
+                </h2>
+                <div id="categories-feedback" class="feedback" hidden></div>
+                <div id="grid-categories" class="grid-categories"></div>
+              </div>
             </div>
           </section>
 
@@ -511,6 +541,7 @@
                   <button type="submit" class="btn btn-primary">Atualizar</button>
                 </div>
               </form>
+              <div id="goals-feedback" class="feedback" hidden></div>
             </div>
 
           </section>
