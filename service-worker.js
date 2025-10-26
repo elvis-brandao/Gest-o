@@ -6,7 +6,7 @@
   - Ignora métodos não-GET.
 */
 
-const CACHE_NAME = 'financaspro-v1';
+const CACHE_NAME = 'financaspro-v2';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
@@ -90,7 +90,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Externo: cache-first (inclui opaque)
+  // Externo: não cachear Supabase; demais externos cache-first seguro
+  const isSupabase = url.hostname.includes('supabase.co');
+  if (isSupabase) {
+    event.respondWith(fetch(request));
+    return;
+  }
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;

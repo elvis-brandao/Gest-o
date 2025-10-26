@@ -567,6 +567,26 @@ try {
       if (tip && tip.classList.contains('open')) setTooltipMaxWidth(icon, tip);
     });
   });
+  // Fallback de polling quando realtime não estiver ativo
+  let __pollTimer = null;
+  window.addEventListener('db:subscription', (ev) => {
+    const status = ev?.detail?.status;
+    if (status === 'SUBSCRIBED') {
+      if (__pollTimer) { clearInterval(__pollTimer); __pollTimer = null; }
+    } else {
+      if (!__pollTimer) {
+        __pollTimer = setInterval(async () => {
+          try {
+            await hydrateAllData();
+            renderAll();
+            if (currentRoute === 'transactions') {
+              try { await loadTransactionsPage(transactionsPage); } catch {}
+            }
+          } catch {}
+        }, 5000);
+      }
+    }
+  });
 } catch {}
 
 // Charts
