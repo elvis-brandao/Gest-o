@@ -22,25 +22,18 @@ const getPrevMonthKey = (monthKey) => {
 };
 
 // Persistência (localStorage)
-const storage = {
-  get(key, fallback) {
-    const raw = localStorage.getItem(key);
-    try { return raw ? JSON.parse(raw) : fallback; } catch { return fallback; }
-  },
-  set(key, value) { localStorage.setItem(key, JSON.stringify(value)); },
-};
+// Removido: armazenamento local de dados do banco (migrado para Supabase)
+// Mantemos localStorage apenas para estados de UI (ex.: cores recentes)
 
 // Valor padrão para meta mensal quando não existe registro
 const DEFAULT_MONTHLY_GOAL = 5000;
 
 // Estado
-let transactions = storage.get('transactions', []);
-let categories = storage.get('categories', []);
-let monthlyGoal = storage.get('monthlyGoal', { amount: 0 });
-let categoryGoals = storage.get('categoryGoals', []);
-let banks = storage.get('banks', []);
+let transactions = [];
+let categories = [];
+let banks = [];
 let selectedMonth = getCurrentMonthKey();
-let monthlyGoalsMap = storage.get('monthlyGoals', {});
+let monthlyGoalsMap = {};
 const getSelectedMonthlyGoalAmount = () => Number(monthlyGoalsMap[selectedMonth] ?? 0);
 
 // Hidratação central de dados: sincroniza bancos do serviço (Supabase quando disponível)
@@ -50,7 +43,6 @@ async function hydrateAllData() {
       const items = await window.BanksService.fetchBanks();
       if (Array.isArray(items)) {
         banks = items.map(b => ({ id: b.id, name: b.name, icon: b.icon ?? null, color: b.color ?? null }));
-        storage.set('banks', banks);
       }
     }
   } catch (e) {
@@ -61,7 +53,6 @@ async function hydrateAllData() {
       const items = await window.CategoriesService.fetchCategories();
       if (Array.isArray(items)) {
         categories = items.map(c => ({ id: c.id, name: c.name, color: c.color ?? '#6200ee' }));
-        storage.set('categories', categories);
       }
     }
   } catch (e) {
@@ -72,17 +63,27 @@ async function hydrateAllData() {
       const rows = await window.TransactionsService.fetchTransactionsByMonth(selectedMonth);
       if (Array.isArray(rows)) {
         transactions = rows.map(mapDbTransactionToLocal);
-        storage.set('transactions', transactions);
       }
     } else if (window.TransactionsService?.fetchTransactions) {
       const rows = await window.TransactionsService.fetchTransactions();
       if (Array.isArray(rows)) {
         transactions = rows.map(mapDbTransactionToLocal);
-        storage.set('transactions', transactions);
       }
     }
   } catch (e) {
     console.warn('hydrateAllData(transactions) error:', e);
+  }
+  try {
+    if (window.GoalsService?.fetchMonthlyGoalFor) {
+      const mg = await window.GoalsService.fetchMonthlyGoalFor(selectedMonth);
+      if (mg && mg.target_amount != null) {
+        monthlyGoalsMap[selectedMonth] = Number(mg.target_amount) || 0;
+      } else {
+        // se não houver meta, mantém mapa sem valor para cair no default
+      }
+    }
+  } catch (e) {
+    console.warn('hydrateAllData(goals) error:', e);
   }
 }
 
@@ -187,6 +188,33 @@ const progressPercentEl = document.getElementById('progress-percent');
 const progressWarningEl = document.getElementById('progress-warning');
 
 let currentRoute = 'auth';
+
+// Overlay global de carregamento
+let __loadingOverlayEl = null;
+function ensureLoadingOverlay() {
+  if (__loadingOverlayEl) return __loadingOverlayEl;
+  const el = document.createElement('div');
+  el.id = 'global-loading-overlay';
+  el.style.position = 'fixed';
+  el.style.inset = '0';
+  el.style.background = 'rgba(0,0,0,0.35)';
+  el.style.display = 'none';
+  el.style.alignItems = 'center';
+  el.style.justifyContent = 'center';
+  el.style.zIndex = '9999';
+  el.innerHTML = '<div class="loading-card"><div class="spinner"></div><div id="loading-text">Carregando...</div></div>';
+  document.body.appendChild(el);
+  __loadingOverlayEl = el;
+  return el;
+}
+function showLoading(text = 'Carregando...') {
+  const el = ensureLoadingOverlay();
+  try { el.querySelector('#loading-text').textContent = text; } catch {}
+  el.style.display = 'flex';
+}
+function hideLoading() {
+  if (__loadingOverlayEl) __loadingOverlayEl.style.display = 'none';
+}
 
 // Formulários
 const formTx = document.getElementById('form-transaction');
@@ -370,17 +398,17 @@ formCat?.addEventListener('submit', async (e) => {
   const name = catNameEl?.value?.trim();
   const color = catColorEl?.value || '#6200ee';
   if (!name) return;
+  showLoading('Salvando categoria...');
   try {
     const row = await window.CategoriesService?.createCategory?.({ name, color });
-    // Após criar, preferir refetch remoto para garantir consistência
     try {
       const refreshed = await window.CategoriesService?.fetchCategories?.();
       categories = Array.isArray(refreshed) ? refreshed : [row, ...categories];
     } catch {
       categories = [row, ...categories];
     }
-    storage.set('categories', categories);
   } catch (err) { console.warn('createCategory error:', err); }
+  hideLoading();
   if (catNameEl) catNameEl.value = '';
   renderCategories();
   const el = document.getElementById('categories-feedback');
@@ -400,10 +428,10 @@ formMonthlyGoal?.addEventListener('submit', async (e) => {
   try {
     const amount = Number(goalAmountEl?.value || 0);
     if (!Number.isFinite(amount) || amount <= 0) return;
+    showLoading('Salvando meta...');
     const saved = await window.GoalsService?.saveMonthlyGoalFor?.(selectedMonth, amount);
     const finalAmount = Number(saved?.target_amount ?? amount) || 0;
     monthlyGoalsMap[selectedMonth] = finalAmount;
-    storage.set('monthlyGoals', monthlyGoalsMap);
     renderGoals();
     renderSummary();
     showGoalsFeedback('Meta atualizada com sucesso', 'success');
@@ -411,6 +439,8 @@ formMonthlyGoal?.addEventListener('submit', async (e) => {
   } catch (err) {
     console.warn('saveMonthlyGoalFor error:', err);
     showGoalsFeedback('Falha ao atualizar meta', 'error');
+  } finally {
+    hideLoading();
   }
 });
 
@@ -443,8 +473,8 @@ monthFilterInputEl?.addEventListener('change', async (e) => {
   const val = (e.target?.value || '').trim();
   if (!val) return;
   selectedMonth = val;
-  storage.set('selectedMonth', selectedMonth);
   closeMonthPopover();
+  showLoading('Carregando mês...');
   try {
     await hydrateAllData();
   } catch {}
@@ -452,15 +482,17 @@ monthFilterInputEl?.addEventListener('change', async (e) => {
     const mg = await window.GoalsService?.fetchMonthlyGoalFor?.(selectedMonth);
     if (mg && mg.target_amount != null) {
       monthlyGoalsMap[selectedMonth] = Number(mg.target_amount)||0;
-      storage.set('monthlyGoals', monthlyGoalsMap);
-      // Atualiza imediatamente o campo da meta
       if (goalAmountEl) goalAmountEl.value = String(monthlyGoalsMap[selectedMonth] ?? '');
     } else {
-      // Limpa se não houver meta
+      monthlyGoalsMap[selectedMonth] = 0; // sem meta cadastrada para o mês
       if (goalAmountEl) goalAmountEl.value = '';
     }
-  } catch {}
-  renderAll();
+  } catch {
+    monthlyGoalsMap[selectedMonth] = 0; // erro ao buscar: assume zero
+    if (goalAmountEl) goalAmountEl.value = '';
+  }
+  try { renderAll(); } catch {}
+  hideLoading();
 });
 document.addEventListener('click', (e) => {
   try {
@@ -1176,6 +1208,9 @@ function showPage(route, opts = {}) {
   if (route === 'auth') { root.classList.add('auth-mode'); } else { root.classList.remove('auth-mode'); }
   updateAuthUI();
   renderAll();
+  if (route === 'transactions') {
+    try { loadTransactionsPage(1); } catch {}
+  }
 }
 
 navLinks.forEach(a => a.addEventListener('click', () => {
@@ -1298,6 +1333,7 @@ function renderTransactions() {
       try { e.stopImmediatePropagation?.(); } catch {}
       const id = btn.dataset.id;
       try {
+        showLoading('Excluindo transação...');
         if (window.TransactionsService?.deleteTransaction) {
           await window.TransactionsService.deleteTransaction(id);
         }
@@ -1309,6 +1345,8 @@ function renderTransactions() {
       } catch (err) {
         console.error('Erro ao excluir transação:', err);
         showTransactionsFeedback('Erro ao excluir transação', 'error');
+      } finally {
+        hideLoading();
       }
     }, { capture: true });
   }
@@ -1373,6 +1411,7 @@ function renderCategories() {
     btnDelete.addEventListener('click', async () => {
       const catName = c.name;
       btnDelete.disabled = true;
+      showLoading('Excluindo categoria...');
       try {
         await window.CategoriesService?.deleteCategory?.(c.id);
       } catch (e) {
@@ -1385,11 +1424,11 @@ function renderCategories() {
       const refreshedList = Array.isArray(refreshed) ? refreshed : categories.filter(x => x.id !== c.id);
       const stillExists = refreshedList.some(x => String(x.id) === String(c.id));
       categories = refreshedList;
-      storage.set('categories', categories);
       if (!stillExists) {
-        // Limpa metas associadas à categoria excluída
-        categoryGoals = categoryGoals.filter(g => String(g.categoryId) !== String(c.id));
-        storage.set('categoryGoals', categoryGoals);
+        // Limpa metas associadas à categoria excluída (somente memória)
+        if (typeof categoryGoals !== 'undefined' && Array.isArray(categoryGoals)) {
+          categoryGoals = categoryGoals.filter(g => String(g.categoryId) !== String(c.id));
+        }
       }
       renderCategories();
       const el = document.getElementById('categories-feedback');
@@ -1402,6 +1441,7 @@ function renderCategories() {
       }
       try { window.StateMonitor?.markWrite?.('categories'); } catch {}
       btnDelete.disabled = false;
+      hideLoading();
     });
 
     header.appendChild(title);
@@ -1507,6 +1547,7 @@ function renderBanks() {
       const bankName = b.name;
       // Evitar múltiplos cliques
       btnDelete.disabled = true;
+      showLoading('Excluindo banco...');
       try {
         if (window.BanksService?.deleteBank) {
           await window.BanksService.deleteBank(b.id);
@@ -1520,11 +1561,11 @@ function renderBanks() {
       const refreshedList = Array.isArray(refreshed) ? refreshed : banks.filter(x => x.id !== b.id);
       const stillExists = refreshedList.some(x => String(x.id) === String(b.id));
       banks = refreshedList;
-      storage.set('banks', banks);
       renderBanks();
       showBanksFeedback(stillExists ? `Falha ao excluir banco "${bankName}"` : `Banco "${bankName}" excluído com sucesso`, stillExists ? 'error' : 'success');
       try { window.StateMonitor?.markWrite?.('banks'); } catch {}
       btnDelete.disabled = false;
+      hideLoading();
     });
 
     header.appendChild(nameEl);
@@ -1540,6 +1581,7 @@ formBank?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = bankNameEl?.value?.trim();
   if (!name) return;
+  showLoading('Criando banco...');
   try {
     if (window.BanksService?.createBank) {
       const row = await window.BanksService.createBank({ name });
@@ -1550,18 +1592,13 @@ formBank?.addEventListener('submit', async (e) => {
       } catch {
         banks = [row, ...banks];
       }
-      storage.set('banks', banks);
-    } else {
-      // modo offline/local
-      const row = { id: Date.now(), name };
-      banks = [row, ...banks];
-      storage.set('banks', banks);
     }
   } catch (err) { console.warn('createBank error:', err); }
   if (bankNameEl) bankNameEl.value = '';
   renderAll();
   showBanksFeedback(`Banco "${name}" adicionado com sucesso`, 'success');
   try { window.StateMonitor?.markWrite?.('banks'); } catch {}
+  hideLoading();
 });
 
 function renderAll() {
@@ -1591,6 +1628,19 @@ try {
     if (currentRoute === 'categories') showCategoriesFeedback(ok ? 'Dados atualizados' : 'Falha ao atualizar', ok ? 'success' : 'error');
     if (currentRoute === 'banks') showBanksFeedback(ok ? 'Dados atualizados' : 'Falha ao atualizar', ok ? 'success' : 'error');
     try { renderAll(); } catch {}
+  });
+  // Auto-refresh via realtime
+  window.addEventListener('db:change', async (ev) => {
+    const tbl = ev?.detail?.table;
+    if (['banks','categories','transactions','monthly_goals'].includes(tbl)) {
+      try {
+        await hydrateAllData();
+        renderAll();
+        if (currentRoute === 'transactions') {
+          try { await loadTransactionsPage(transactionsPage); } catch {}
+        }
+      } catch (e) { console.warn('auto-refresh error:', e); }
+    }
   });
 } catch {}
 
@@ -1673,6 +1723,7 @@ function renderTransactions(transactions = []) {
     try { e.stopImmediatePropagation?.(); } catch {}
     const id = btn.dataset.id;
     try {
+      showLoading('Excluindo transação...');
       if (window.TransactionsService?.deleteTransaction) {
         await window.TransactionsService.deleteTransaction(id);
       }
@@ -1684,6 +1735,8 @@ function renderTransactions(transactions = []) {
     } catch (err) {
       console.error('Erro ao excluir transação:', err);
       showTransactionsFeedback('Erro ao excluir transação', 'error');
+    } finally {
+      hideLoading();
     }
   }, { capture: true });
 }
@@ -1708,33 +1761,34 @@ try {
     const localTx = { id: crypto.randomUUID(), description, amount, date, type, categoryId, bankId: bankId || null };
 
     try {
-      let created = null;
-      if (window.TransactionsService?.createTransaction && canUseSupabase()) {
-        created = await window.TransactionsService.createTransaction(mapLocalTransactionToDb(localTx));
-      } else if (window.TransactionsService?.createTransaction) {
-        // Mesmo sem supabase, o serviço persiste local/outbox
-        created = await window.TransactionsService.createTransaction(mapLocalTransactionToDb(localTx));
-      }
-      const newLocal = created ? mapDbTransactionToLocal(created) : localTx;
-      transactions.unshift(newLocal);
-      storage.set('transactions', transactions);
-      showTransactionsFeedback('Transação adicionada com sucesso', 'success');
-      renderAll();
-      try { window.StateMonitor?.markWrite?.('transactions'); } catch {}
-
-      // Resetar formulário
-      if (txDescriptionEl) txDescriptionEl.value = '';
-      if (txAmountEl) txAmountEl.value = '';
-      if (txDateEl) txDateEl.value = todayISO();
-      if (txTypeEl) txTypeEl.value = 'expense';
-      updateBankVisibility();
-      if (txCategoryEl) txCategoryEl.value = categories[0]?.id || '';
-      if (txBankEl) txBankEl.value = '';
-    } catch (err) {
-      console.error('Erro ao criar transação:', err);
-      showTransactionsFeedback('Falha ao adicionar a transação', 'error');
+    showLoading('Adicionando transação...');
+    let created = null;
+    if (window.TransactionsService?.createTransaction) {
+      created = await window.TransactionsService.createTransaction(mapLocalTransactionToDb(localTx));
     }
-  });
+    const newLocal = created ? mapDbTransactionToLocal(created) : localTx;
+    transactions.unshift(newLocal);
+    showTransactionsFeedback('Transação adicionada com sucesso', 'success');
+    // Após criar, refetch do mês atual para sincronizar todos os componentes
+    try { await hydrateAllData(); } catch {}
+    renderAll();
+    try { window.StateMonitor?.markWrite?.('transactions'); } catch {}
+
+    // Resetar formulário
+    if (txDescriptionEl) txDescriptionEl.value = '';
+    if (txAmountEl) txAmountEl.value = '';
+    if (txDateEl) txDateEl.value = todayISO();
+    if (txTypeEl) txTypeEl.value = 'expense';
+    updateBankVisibility();
+    if (txCategoryEl) txCategoryEl.value = categories[0]?.id || '';
+    if (txBankEl) txBankEl.value = '';
+  } catch (err) {
+    console.error('Erro ao criar transação:', err);
+    showTransactionsFeedback('Falha ao adicionar a transação', 'error');
+  } finally {
+    hideLoading();
+  }
+});
 } catch {}
 function showTransactionsFeedback(message, type = 'success') {
   const el = document.getElementById('transactions-feedback');
@@ -1744,6 +1798,122 @@ function showTransactionsFeedback(message, type = 'success') {
   el.classList.add(type);
   el.hidden = false;
   setTimeout(() => { el.hidden = true; }, 2500);
+}
+
+// Paginação simples de transações (lista)
+const TRANSACTIONS_LIMIT = 20;
+let transactionsPage = 1;
+let transactionsPageRows = [];
+
+async function loadTransactionsPage(page = 1) {
+  showLoading('Carregando transações...');
+  try {
+    const rows = await window.TransactionsService?.fetchTransactionsByMonth?.(selectedMonth, { page, limit: TRANSACTIONS_LIMIT }) || [];
+    transactionsPageRows = rows.map(mapDbTransactionToLocal);
+    transactionsPage = page;
+    renderTransactionsPage();
+  } catch (e) {
+    console.warn('loadTransactionsPage error:', e);
+  } finally {
+    hideLoading();
+  }
+}
+
+function renderTransactionsPage() {
+  const listEl = document.getElementById('list-transactions');
+  if (!listEl) return;
+  const list = Array.isArray(transactionsPageRows) ? transactionsPageRows : [];
+  const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (m) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+  }[m]));
+  listEl.innerHTML = (list || []).map((tx) => {
+    const isIncome = tx.type === 'income';
+    const iconClass = isIncome ? 'income' : 'expense';
+    const amountSign = isIncome ? '+' : '-';
+    const amountClass = isIncome ? 'income' : 'expense';
+    const categoryName = tx.categoryName || (Array.isArray(categories) ? (categories.find(c => String(c.id)===String(tx.categoryId))?.name) : '') || 'Sem categoria';
+    const bankName = tx.bankName || tx.bank || (Array.isArray(banks) ? (banks.find(b => String(b.id)===String(tx.bankId))?.name) : '') || '';
+    const dateStr = tx.date ? new Date(tx.date).toLocaleDateString('pt-BR') : '';
+    const amountStr = `R$ ${Number(tx.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+    return `
+      <div class="tx-card" data-id="${tx.id}">
+        <div class="tx-header">
+          <div class="tx-left">
+            <div class="tx-icon ${iconClass}">${isIncome ? '↑' : '↓'}</div>
+            <h4 class="tx-title">${escapeHtml(tx.description)}</h4>
+          </div>
+          <div class="tx-date">${escapeHtml(dateStr)}</div>
+        </div>
+        <div class="tx-body">
+          <div class="tx-meta">
+            <span>${escapeHtml(categoryName)}</span>
+            ${bankName ? `<span>${escapeHtml(bankName)}</span>` : ''}
+          </div>
+          <div class="tx-amount ${amountClass}">${amountSign} ${escapeHtml(amountStr)}</div>
+        </div>
+        <div class="tx-actions">
+          <button class="tx-delete action delete" data-id="${tx.id}" type="button" aria-label="Excluir">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+              <path d="M10 11v6"></path>
+              <path d="M14 11v6"></path>
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+            </svg>
+          </button>
+        </div>
+      </div>`;
+  }).join('') || `<div class="muted" style="text-align:center">Nenhuma transação nesta página</div>`;
+
+  // Ações: exclusão
+  const deleteButtons = listEl.querySelectorAll('.tx-delete');
+  deleteButtons.forEach((btn) => {
+    btn.addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      const id = btn.getAttribute('data-id');
+      if (!id) return;
+      const ok = window.confirm('Excluir esta transação?');
+      if (!ok) return;
+      showLoading('Excluindo transação...');
+      try {
+        await window.TransactionsService?.deleteTransaction?.(id);
+        // Recarregar dados e manter página atual
+        await hydrateAllData();
+        renderAll();
+        await loadTransactionsPage(transactionsPage);
+      } catch (err) {
+        console.warn('Erro ao excluir transação:', err);
+        showTransactionsFeedback('Falha ao excluir', true);
+      } finally {
+        hideLoading();
+      }
+    });
+  });
+
+  // Controles de paginação
+  let pagerEl = document.getElementById('transactions-pager');
+  if (!pagerEl) {
+    pagerEl = document.createElement('div');
+    pagerEl.id = 'transactions-pager';
+    pagerEl.className = 'pager';
+    listEl.parentNode && listEl.parentNode.appendChild(pagerEl);
+  }
+  const hasMore = (list || []).length >= TRANSACTIONS_LIMIT;
+  pagerEl.innerHTML = `
+    <div class="pager-inner">
+      <button id="tx-prev" class="btn" ${transactionsPage <= 1 ? 'disabled' : ''} aria-label="Anterior">
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+</button>
+<span class="pager-info">Página ${transactionsPage}</span>
+<button id="tx-next" class="btn" ${!hasMore ? 'disabled' : ''} aria-label="Próxima">
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8.59 16.59 10 18l6-6-6-6-1.41 1.41L13.17 12z"/></svg>
+</button>
+    </div>
+  `;
+  const prevBtn = document.getElementById('tx-prev');
+  const nextBtn = document.getElementById('tx-next');
+  prevBtn && prevBtn.addEventListener('click', (e) => { e.preventDefault(); if (transactionsPage > 1) loadTransactionsPage(transactionsPage - 1); });
+  nextBtn && nextBtn.addEventListener('click', (e) => { e.preventDefault(); if (hasMore) loadTransactionsPage(transactionsPage + 1); });
 }
 
 // Inicialização da UI de autenticação

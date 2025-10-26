@@ -17,19 +17,33 @@
     } catch {}
   };
 
+  const safeResetAuth = async () => {
+    try { await window.Supabase?.auth?.signOut?.(); } catch {}
+    try { window.resetSupabaseAuthStorage?.(); } catch {}
+  };
+
   const init = async () => {
     if (initialized) return;
     initialized = true;
     if (!isSupabaseEnabled()) return;
 
     try {
-      const { data: { user } } = await window.Supabase.auth.getUser();
+      const { data: { user }, error } = await window.Supabase.auth.getUser();
       currentUser = user || null;
+      // Se houver erro de refresh/sessão inválida, faça reset e siga como signed-out
+      const msg = String(error?.message || '');
+      if (!currentUser && msg && /refresh token/i.test(msg)) {
+        await safeResetAuth();
+      }
     } catch { currentUser = null; }
 
     try {
-      window.Supabase.auth.onAuthStateChange((_event, session) => {
+      window.Supabase.auth.onAuthStateChange((event, session) => {
         currentUser = session?.user || null;
+        // Se o refresh falhar, limpar storage e marcar como deslogado
+        if (!currentUser && /TOKEN_REFRESHED_FAILED|SIGNED_OUT/i.test(String(event))) {
+          safeResetAuth();
+        }
         dispatchAuthChange(currentUser);
       });
     } catch {}
@@ -55,7 +69,6 @@
       options: { data: { name } }
     });
     if (error) throw error;
-    // Atualiza cache se já houver sessão (depende da config de confirmação de email)
     currentUser = data?.user || null;
     dispatchAuthChange(currentUser);
     return data;

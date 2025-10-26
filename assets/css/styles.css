@@ -714,6 +714,35 @@ input.with-icon { padding-left: 34px; }
 .color-preview.confirmed { border-color: var(--color-primary); transform: scale(1.02); }
 .btn-secondary { background-color: #e7e8ec; color: var(--color-primary); }
 .btn-secondary:hover { background-color: #dcdde2; }
+
+/* Pagination Controls */
+.pager {
+  margin-top: 24px;
+  padding: 16px 0;
+  border-top: 1px solid rgba(0,0,0,0.08);
+}
+.pager-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.pager-info {
+  font-size: 0.9rem;
+  color: #00000080;
+  font-weight: 500;
+}
+.pager .btn {
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  min-width: 80px;
+}
+.pager .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 @media (min-width: 900px) {
   .color-picker-row { gap: 12px; }
   #cat-color { width: 56px; height: 40px; }

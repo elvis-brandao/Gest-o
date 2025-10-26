@@ -51,14 +51,62 @@ export function getSupabase() {
   return supabase;
 }
 
+// Helpers de realtime para mudar UI imediatamente quando o banco atualizar
+export function subscribeToChanges(tables = []) {
+  if (!supabase || !Array.isArray(tables) || tables.length === 0) return null;
+  const channel = supabase.channel('db-changes');
+  tables.forEach((table) => {
+    channel.on('postgres_changes', { event: '*', schema: 'public', table }, (payload) => {
+      try {
+        window.dispatchEvent(new CustomEvent('db:change', { detail: { table, payload } }));
+      } catch {}
+    });
+  });
+  channel.subscribe((status) => {
+    try {
+      window.dispatchEvent(new CustomEvent('db:subscription', { detail: { status } }));
+    } catch {}
+  });
+  return channel;
+}
+
+// Limpa todos os tokens locais do projeto atual (útil após sessão inválida)
+export function resetAuthStorage() {
+  try {
+    const cfg = window.__ENV || {};
+    const ref = extractProjectRef(cfg.SUPABASE_URL);
+    const prefix = ref ? `sb-${ref}-` : 'sb-';
+    const keys = Object.keys(localStorage);
+    for (const k of keys) {
+      if (k.startsWith(prefix)) {
+        try { localStorage.removeItem(k); } catch {}
+      }
+    }
+  } catch {}
+}
+
+function ensureRealtimeSubscriptions() {
+  try {
+    const cfg = window.__ENV || {};
+    if (!(cfg.USE_SUPABASE && cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY)) return;
+    if (!supabase) return;
+    if (window.__SUB_CHANNEL__) return; // evitar duplicações
+    const defaultTables = ['banks', 'categories', 'transactions', 'monthly_goals', 'profiles'];
+    window.__SUB_CHANNEL__ = subscribeToChanges(defaultTables);
+  } catch {}
+}
+
 // Inicialização automática com window.__ENV (se habilitado)
 (function autoInit(){
   const cfg = window.__ENV || {};
   if (cfg.USE_SUPABASE && cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY) {
     initSupabase(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+    ensureRealtimeSubscriptions();
   } else {
     window.Supabase = null;
   }
+  // expor utilitário de reset para uso global
+  try { window.resetSupabaseAuthStorage = resetAuthStorage; } catch {}
 })();
 
 // Re-inicializar quando o ambiente ficar pronto (ex.: .env carregado)
@@ -66,5 +114,6 @@ window.addEventListener('env:ready', () => {
   const cfg = window.__ENV || {};
   if (cfg.USE_SUPABASE && cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY) {
     initSupabase(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+    ensureRealtimeSubscriptions();
   }
 });
